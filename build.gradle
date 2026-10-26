@@ -1,0 +1,196 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    configurations.classpath.resolutionStrategy.cacheChangingModulesFor 30, 'days'
+    dependencies { classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT' }
+}
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'net.minecraftforge.gradle' version '6.0.54'
+}
+apply plugin: 'org.spongepowered.mixin'
+
+version = mod_version
+group = mod_group_id
+base { archivesName = mod_id + '-1.20.1-forge' }
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+    copyIdeResources = true
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            mods { "${mod_id}" { source sourceSets.main } }
+        }
+        client { }
+        server { args '--nogui' }
+    }
+}
+
+mixin {
+    add sourceSets.main, "${mod_id}.refmap.json"
+    config "${mod_id}.mixins.json"
+    config "${mod_id}.blackhole.mixins.json"
+}
+repositories {
+    maven { url = 'https://maven.minecraftforge.net/' }
+    maven {
+        url = 'https://repo.spongepowered.org/repository/maven-public/'
+        content { includeGroup 'org.spongepowered' }
+    }
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+    mavenCentral()
+}
+// Pin Modrinth version IDs to the audited Forge releases, rather than a mutable latest version.
+def swayDependency = 'maven.modrinth:sway:zZZeiMZe' // 2.4.5-forge+1.20.1
+def foliageDependency = 'maven.modrinth:mc2-interactive-foliage:M4DdktEm' // 2.2.0-forge+1.20.1
+def oculusDependency = 'maven.modrinth:oculus:iQ1SwGc3' // 1.20.1-1.8.0
+
+// Bytecode guards must inspect the original published classes, before FG remaps them.
+configurations {
+    compatibilityArtifacts {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    implementation fg.deobf(swayDependency)
+    implementation fg.deobf(foliageDependency)
+    implementation fg.deobf(oculusDependency)
+    // Oculus requires Embeddium in the development runtime; Modrinth POMs omit this dependency.
+    runtimeOnly fg.deobf('maven.modrinth:embeddium:UTbfe5d1') // 0.3.31+mc1.20.1
+    implementation fg.deobf('maven.modrinth:endinglibrary:KwxldfZc')
+    compatibilityArtifacts swayDependency
+    compatibilityArtifacts foliageDependency
+    compatibilityArtifacts oculusDependency
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+def originalModJar = { String module ->
+    configurations.compatibilityArtifacts.resolvedConfiguration.resolvedArtifacts.find {
+        it.moduleVersion.id.name == module
+    }.file
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def props = [minecraft_version_range: minecraft_version_range,
+                 forge_version_range: forge_version_range, loader_version_range: loader_version_range,
+                 mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
+                 mod_authors: mod_authors, mod_description: mod_description]
+    inputs.properties props
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props }
+}
+tasks.named('jar', Jar).configure {
+    manifest { attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}.blackhole.mixins.json", 'Implementation-Version': mod_version) }
+    finalizedBy 'reobfJar'
+}
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+// These tasks verify contracts and delegation without starting Minecraft.
+sourceSets {
+    verification {
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+tasks.register('verifyCompatibility', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.ContractVerification'
+    inputs.files(configurations.compatibilityArtifacts)
+    doFirst { args originalModJar('sway').absolutePath, originalModJar('mc2-interactive-foliage').absolutePath, layout.buildDirectory.dir('classes/java/main').get().asFile.absolutePath }
+}
+tasks.register('verifyDelegation', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.DelegationVerification'
+}
+tasks.named('check') { dependsOn 'verifyCompatibility', 'verifyDelegation' }
+
+tasks.register('verifyArtifact', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('reobfJar'), tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.ArtifactVerification'
+    args tasks.named('jar', Jar).flatMap { it.archiveFile }.get().asFile.absolutePath, mod_version
+}
+tasks.named('check') { dependsOn 'verifyArtifact' }
+
+// Regression for the ModLauncher bytecode-provider rejection observed in 1.0.0's runtime log.
+tasks.register('verifyGuard', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.GuardVerification'
+    // Match the launcher's access needed by SecureJar's union filesystem in this headless test only.
+    jvmArgs '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED'
+    inputs.files(configurations.compatibilityArtifacts)
+    doFirst { args originalModJar('sway').absolutePath, layout.buildDirectory.dir('classes/java/main').get().asFile.absolutePath }
+}
+tasks.named('check') { dependsOn 'verifyGuard' }
+
+tasks.register('verifyBlackHole', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.BlackHoleVerification'
+}
+tasks.named('check') { dependsOn 'verifyBlackHole' }
+tasks.register('verifyBlackHoleContracts', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.BlackHoleContractVerification'
+    inputs.files(configurations.compatibilityArtifacts)
+    doFirst { args originalModJar('oculus').absolutePath, layout.buildDirectory.dir('classes/java/main').get().asFile.absolutePath }
+}
+tasks.named('check') { dependsOn 'verifyBlackHoleContracts' }
+
+dependencies {
+    verificationRuntimeOnly 'org.lwjgl:lwjgl:3.3.1:natives-windows'
+    verificationRuntimeOnly 'org.lwjgl:lwjgl-glfw:3.3.1:natives-windows'
+    verificationRuntimeOnly 'org.lwjgl:lwjgl-opengl:3.3.1:natives-windows'
+}
+tasks.register('verifyBlackHoleGpu', JavaExec) {
+    group = 'verification'
+    description = 'Compiles production GLSL and tests synthetic occlusion in a hidden GLFW context; does not launch Minecraft.'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.BlackHoleGpuVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/blackhole-1.1.0/gpu').absolutePath
+}
+
+tasks.register('verifyBlackHoleLens', JavaExec) {
+    group = 'verification'
+    description = 'Checks near-camera screen-space lens boundaries and foreground rejection without launching Minecraft.'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.BlackHoleLensVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/near-camera-2026-10-26/gpu').absolutePath
+}
+
+// Explicit hidden-GPU regression; never starts Minecraft.
+tasks.register('verifyBlackHoleEnvironment', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.BlackHoleEnvironmentVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/lens-layers-2026-10-26/environment').absolutePath
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "overheaven:blackhole/reference-v1",
+  "parameters": {
+    "radius": 3.2,
+    "inner": 3.8,
+    "outer": 11.0,
+    "thickness": 0.12,
+    "tilt": 30.0,
+    "yaw": -83.0,
+    "brightness": 3.2,
+    "rotation": 0.25,
+    "infall": 0.12,
+    "lensing": 1.0,
+    "glow": 0.7,
+    "playing": true,
+    "hotColor": "#fff9f2",
+    "coldColor": "#98765d"
+  }
+}

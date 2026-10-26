@@ -1,0 +1,22 @@
+{
+  "foliage": {
+    "file": "mc2_interactivefoliage-2.2.0-forge+1.20.1.jar",
+    "sha256": "0885939f61c23fe454d91128e58bfc482a9acd3e728ef541ce3d7f9f06cb588d"
+  },
+  "sway": {
+    "file": "!sway-2.4.5-forge+1.20.1.jar",
+    "sha256": "d15cba14531367415ba397dae216d9f189f15420bb0729faa1ca1b11879804a5"
+  },
+  "fwa": {
+    "file": "fwa+1.20.1-forge-1.2.31.jar",
+    "sha256": "a490f1435f8eccec0a4d354184d37d4ddbcf9e048c805261e86f2008e6ca2e3f"
+  },
+  "embeddium": {
+    "file": "embeddium-0.3.31+mc1.20.1.jar",
+    "sha256": "eed3d1325f2acc2fd4e69bb495e5ccb91d962126ac5330f0582ebc2a3daf47fb"
+  },
+  "oculus": {
+    "file": "oculus-mc1.20.1-1.8.0.jar",
+    "sha256": "0945df0cba0f62b3901dd80c3268e5311b770ece78c78037a45db12ac0425fef"
+  }
+}
