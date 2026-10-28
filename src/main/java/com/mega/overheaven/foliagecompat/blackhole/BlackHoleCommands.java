@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 public final class BlackHoleCommands {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         var root = Commands.literal("blackhole");
+        root.then(com.mega.overheaven.foliagecompat.finale.FinaleCommands.create());
         for (String operation : new String[]{"spawn", "move"}) root.then(Commands.literal(operation).then(id().then(Commands.argument("position", Vec3Argument.vec3(false)).executes(context -> execute(context, operation)))));
         for (String operation : new String[]{"remove", "info"}) root.then(Commands.literal(operation).then(id().executes(context -> execute(context, operation))));
         root.then(Commands.literal("list").executes(context -> execute(context, "list")));
@@ -31,7 +32,7 @@ public final class BlackHoleCommands {
         try {
             if (operation.equals("list") || operation.equals("clear")) {
                 var records = store.all().stream().filter(hole -> hole.dimension().equals(dimension)).toList();
-                if (operation.equals("clear")) for (var hole : records) { store.remove(hole.id()); BlackHoleNetwork.changed(server, hole, null); }
+                if (operation.equals("clear")) for (var hole : records) { com.mega.overheaven.foliagecompat.finale.FinaleManager.get(server).beforeSourceChange(hole.id()); store.remove(hole.id()); BlackHoleNetwork.changed(server, hole, null); }
                 String message = operation + ": " + records.size() + " [" + String.join(", ", records.stream().map(BlackHole::id).toList()) + "]";
                 source.sendSuccess(() -> Component.literal(message), operation.equals("clear")); return records.size();
             }
@@ -47,6 +48,7 @@ public final class BlackHoleCommands {
                 if (operation.equals("preset")) after = BlackHole.reference(id, before.dimension(), before.x(), before.y(), before.z(), now, before.seed());
                 if (operation.equals("set")) after = before.setting(StringArgumentType.getString(context, "property"), StringArgumentType.getString(context, "value"), now);
             }
+            if (after == null || operation.equals("move")) com.mega.overheaven.foliagecompat.finale.FinaleManager.get(server).beforeSourceChange(id);
             if (after == null) store.remove(id); else store.put(after);
             BlackHoleNetwork.changed(server, before, after); source.sendSuccess(() -> Component.literal(operation + ": " + id), true); return 1;
         } catch (IllegalArgumentException exception) { throw new SimpleCommandExceptionType(Component.literal(exception.getMessage())).create(); }

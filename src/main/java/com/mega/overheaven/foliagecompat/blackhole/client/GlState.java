@@ -5,14 +5,14 @@ import static org.lwjgl.opengl.GL33C.*;
 final class GlState implements AutoCloseable {
     private static final GlState[] POOL={new GlState(),new GlState(),new GlState(),new GlState()};
     private static int nesting;
-    private int draw, read, program, vertexArray, active;
+    private int draw, read, program, vertexArray, active,arrayBuffer;
     private int sourceRgb, destinationRgb, sourceAlpha, destinationAlpha, equationRgb, equationAlpha;
     private final int[][] indexedBlend=new int[16][6];
     private final boolean[] indexedEnabled=new boolean[16];
     private final java.nio.ByteBuffer[] indexedMasks=new java.nio.ByteBuffer[16];
     private int drawBuffers;
     private boolean independentBlend;
-    private final int[] viewport=new int[4], scissor=new int[4], textures=new int[11], samplers=new int[11];
+    private final int[] viewport=new int[4], scissor=new int[4], textures=new int[13], samplers=new int[13];
     private boolean blend, depth, cull, clip, srgb, stencil, depthWrite;
     private final java.nio.ByteBuffer colorWrite=org.lwjgl.BufferUtils.createByteBuffer(4);
     static GlState capture() {
@@ -25,6 +25,7 @@ final class GlState implements AutoCloseable {
             for(int index=0;index<drawBuffers;index++) indexedMasks[index]=org.lwjgl.BufferUtils.createByteBuffer(4);
         }
         independentBlend=org.lwjgl.opengl.GL.getCapabilities().GL_ARB_draw_buffers_blend || org.lwjgl.opengl.GL.getCapabilities().OpenGL40;
+        arrayBuffer=glGetInteger(GL_ARRAY_BUFFER_BINDING);
         draw=glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING); read=glGetInteger(GL_READ_FRAMEBUFFER_BINDING);
         program=glGetInteger(GL_CURRENT_PROGRAM); vertexArray=glGetInteger(GL_VERTEX_ARRAY_BINDING); active=glGetInteger(GL_ACTIVE_TEXTURE);
         sourceRgb=glGetInteger(GL_BLEND_SRC_RGB); destinationRgb=glGetInteger(GL_BLEND_DST_RGB); sourceAlpha=glGetInteger(GL_BLEND_SRC_ALPHA); destinationAlpha=glGetInteger(GL_BLEND_DST_ALPHA); equationRgb=glGetInteger(GL_BLEND_EQUATION_RGB); equationAlpha=glGetInteger(GL_BLEND_EQUATION_ALPHA);
@@ -50,7 +51,7 @@ final class GlState implements AutoCloseable {
     @Override public void close() {
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER,draw); glBindFramebuffer(GL_READ_FRAMEBUFFER,read);
         glViewport(viewport[0],viewport[1],viewport[2],viewport[3]); glScissor(scissor[0],scissor[1],scissor[2],scissor[3]);
-        glUseProgram(program); glBindVertexArray(vertexArray);
+        glUseProgram(program); glBindVertexArray(vertexArray);glBindBuffer(GL_ARRAY_BUFFER,arrayBuffer);
         glBlendFuncSeparate(sourceRgb,destinationRgb,sourceAlpha,destinationAlpha); glBlendEquationSeparate(equationRgb,equationAlpha);
         for(int unit=0;unit<textures.length;unit++) { glActiveTexture(GL_TEXTURE0+unit); glBindTexture(GL_TEXTURE_2D,textures[unit]); glBindSampler(unit,samplers[unit]); }
         glActiveTexture(active); enabled(GL_BLEND,blend); enabled(GL_DEPTH_TEST,depth); enabled(GL_CULL_FACE,cull); enabled(GL_SCISSOR_TEST,clip); enabled(GL_FRAMEBUFFER_SRGB,srgb);

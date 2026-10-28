@@ -33,12 +33,23 @@ public final class OculusBridge {
         Object pack=Iris.getCurrentPack().orElse(null);
         if(pack==checkedPack) return fingerprint;
         checkedPack=pack; fingerprint=false;
-        try(var input=java.nio.file.Files.newInputStream(Iris.getShaderpacksDirectory().resolve("ComplementaryUnbound_r5.9.3.zip"))) {
-            var digest=java.security.MessageDigest.getInstance("SHA-256"); byte[] buffer=new byte[65536]; int count;
-            while((count=input.read(buffer))!=-1) digest.update(buffer,0,count);
-            fingerprint=java.util.HexFormat.of().formatHex(digest.digest()).equals("98ac741dee294d2a3c82d153349148c3bb7fb688c30eb3b49c3b9ac37e968c5a");
+        try {
+            String hash=PackSkySource.hash(Iris.getShaderpacksDirectory().resolve("ComplementaryUnbound_r5.9.3.zip"));
+            fingerprint=hash.equals(PackSkySource.ORIGINAL_SHA256) || hash.equals(PackSkySource.FULL_SPHERE_SHA256);
         } catch(Exception exception) { PatchLog.LOGGER.error("Cannot verify black hole shaderpack adapter: {}",exception.toString()); }
         return fingerprint;
+    }
+    static Object skyIdentity() { return Iris.getCurrentPack().orElse(null); }
+    static String skySource() throws java.io.IOException {
+        if(!"ComplementaryUnbound_r5.9.3.zip".equals(Iris.getCurrentPackName())) throw new java.io.IOException("Finale sky has no adapter for "+Iris.getCurrentPackName());
+        var pack=Iris.getCurrentPack().orElseThrow(()->new java.io.IOException("No active shader pack"));
+        var values=pack.getShaderPackOptions().getOptionValues();
+        var options=new java.util.HashMap<String,String>();
+        for(String key:PackSkySource.OPTIONS) {
+            String value=values.getStringValueOrDefault(key);
+            if(value!=null) options.put(key,value);
+        }
+        return PackSkySource.load(Iris.getShaderpacksDirectory().resolve(Iris.getCurrentPackName()),options,GlProgram.read("finale_pack_stars.fsh"));
     }
     public static void before(RenderTargets targets,ImmutableSet<Integer> flipped) {
         pending=false;

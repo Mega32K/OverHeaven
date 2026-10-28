@@ -11,6 +11,6 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid=FoliageCompat.MOD_ID,value=Dist.CLIENT,bus=Mod.EventBusSubscriber.Bus.MOD)
 public final class BlackHoleResources {
     @SubscribeEvent public static void reload(RegisterClientReloadListenersEvent event) {
-        event.registerReloadListener((ResourceManagerReloadListener)manager -> Minecraft.getInstance().execute(BlackHoleRenderer.INSTANCE::close));
+        event.registerReloadListener((ResourceManagerReloadListener)manager -> Minecraft.getInstance().execute(()-> { BlackHoleRenderer.INSTANCE.close(); FinaleRenderer.INSTANCE.close(); FinaleAudio.close(); FinaleClient.resetFeedback(); }));
     }
 }

@@ -24,11 +24,15 @@ final class GlProgram implements AutoCloseable {
         } catch (Exception exception) { close(); throw new IllegalStateException("Black hole shader", exception); }
         finally { if (vertex != 0) glDeleteShader(vertex); if (pixel != 0) glDeleteShader(pixel); }
     }
-    private static String read(String file) { try { return source(file); } catch(java.io.IOException exception) { throw new IllegalStateException("Missing black hole shader "+file,exception); } }
+    static String read(String file) { try { return source(file); } catch(java.io.IOException exception) { throw new IllegalStateException("Missing black hole shader "+file,exception); } }
     int handle() { return program; }
     private static String source(String file) throws java.io.IOException {
         try (var reader = Minecraft.getInstance().getResourceManager().openAsReader(new ResourceLocation(FoliageCompat.MOD_ID, "shaders/blackhole/" + file))) {
             String source = reader.lines().collect(java.util.stream.Collectors.joining("\n"));
+            for(String include:new String[]{"finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl"}) {
+                String directive="#include \""+include+"\"";
+                if(source.contains(directive)) source=source.replace(directive,source(include));
+            }
             return source.contains("#include \"field.glsl\"") ? source.replace("#include \"field.glsl\"", source("field.glsl")) : source;
         }
     }

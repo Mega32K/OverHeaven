@@ -1,0 +1,6 @@
+{
+  "parent": "overheaven_foliage_compat:item/playing_card",
+  "textures": {
+    "front": "overheaven_foliage_compat:item/cards/playing_card_4"
+  }
+}

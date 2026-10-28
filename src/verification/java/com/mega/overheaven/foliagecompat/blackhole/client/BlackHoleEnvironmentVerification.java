@@ -17,7 +17,7 @@ public final class BlackHoleEnvironmentVerification {
     private static int checks,vao;
     private static Path resources;
     private static void check(boolean condition,String label){if(!condition)throw new AssertionError(label);checks++;}
-    private static String source(String name)throws Exception{return Files.readString(resources.resolve(name)).replace("#include \"field.glsl\"",Files.readString(resources.resolve("field.glsl")));}
+    private static String source(String name)throws Exception{return VerificationShaders.read(resources,name);}
     private static GlProgram program(String name)throws Exception{return new GlProgram(source("fullscreen.vsh"),source(name+".fsh"));}
     private static void draw(){glBindVertexArray(vao);glDrawArrays(GL_TRIANGLES,0,3);}
     private static Matrix4f projection(){return new Matrix4f().perspective((float)Math.toRadians(70),W/(float)H,.05f,4096);}

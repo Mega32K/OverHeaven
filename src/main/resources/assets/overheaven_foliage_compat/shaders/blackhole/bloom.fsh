@@ -18,11 +18,11 @@ vec4 extractLight(vec2 uv) {
     float opaque=distanceAt(uv,texture(OpaqueDepth,uv).r);
     float surface=distanceAt(uv,texture(SurfaceDepth,uv).r);
     vec3 direction=rayAt(uv);
-    vec2 core=sphere(Eye-Center,direction,Radius);
+    vec2 core=sphere(Eye-Center,direction,max(coreRadius(),0.000001));
     float coreHit=core.y>0.0?max(0.0,core.x):1000000.0;
     float impact=length(cross(Eye-Center,direction));
     float rimWidth=max(max(coreHit,1.0)*PixelAngle*1.3,Radius*0.003);
-    float rim=coreHit<opaque?exp(-abs(impact-Radius)/rimWidth)*Brightness*0.18:0.0;
+    float rim=FinaleAmount<0.99999 && coreHit<opaque?exp(-abs(impact-Radius)/rimWidth)*Brightness*0.18:0.0;
     if(rim>0.00001) {
         vec3 rimColor=innerTransitionColor(HotColor,Radius)*rim;
         if(coreHit<surface) { front.rgb+=rimColor; emissionDepth.x=min(emissionDepth.x,coreHit); }

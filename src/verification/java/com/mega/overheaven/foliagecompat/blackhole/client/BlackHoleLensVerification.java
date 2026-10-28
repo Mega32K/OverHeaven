@@ -19,8 +19,7 @@ public final class BlackHoleLensVerification {
     private static Path resources;
     private static void check(boolean value,String message) { if(!value) throw new AssertionError(message); checks++; }
     private static String source(String file) throws Exception {
-        String text=Files.readString(resources.resolve(file));
-        return text.replace("#include \"field.glsl\"",Files.readString(resources.resolve("field.glsl")));
+        return VerificationShaders.read(resources,file);
     }
     private static GlProgram program(String name) throws Exception { return new GlProgram(source("fullscreen.vsh"),source(name+".fsh")); }
     private static void draw() { glBindVertexArray(vao); glDrawArrays(GL_TRIANGLES,0,3); }

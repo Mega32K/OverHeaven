@@ -1,0 +1,110 @@
+{
+  "finale.hum": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/hum",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.pressure": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/pressure",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.grain": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/grain",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.tail": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/tail",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.pulse": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/pulse",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.crack": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/crack",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.rupture": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/rupture",
+        "stream": false,
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "finale.time_break": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/time_break",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.ignite": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/ignite",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.impact": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/impact",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.reverse": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/reverse",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.fold": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/fold",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  }
+}

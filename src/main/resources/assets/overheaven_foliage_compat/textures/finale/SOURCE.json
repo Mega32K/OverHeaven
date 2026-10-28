@@ -1,0 +1,35 @@
+{
+  "source": "https://svs.gsfc.nasa.gov/4851/",
+  "credit": "NASA/Goddard Space Flight Center Scientific Visualization Studio; visualization: Ernie Wright (USRA). Gaia DR2: ESA/Gaia/DPAC.",
+  "usage": "https://svs.gsfc.nasa.gov/help/",
+  "projection": "Celestial equirectangular, north at row zero; longitude increases along texture U.",
+  "derivative": "4096x2048 linear RGB9_E5 with periodic filtering; 4096 resolved bright sources, ranked by integrated source luminance; normalized visual flux.",
+  "sources": [
+    {
+      "file": "milkyway_2020_8k.exr",
+      "bytes": 137307727,
+      "sha256": "361d1961647af073b3b3e4aea4fca85f15b3c9d915e0c8c4befb02520dadd10a"
+    },
+    {
+      "file": "hiptyc_2020_8k.exr",
+      "bytes": 50588860,
+      "sha256": "b8ba8adb3ebe8a7d5331bc2aa2fbb930666c993d71da7d831a869c2b2074cd7f"
+    }
+  ],
+  "outputs": [
+    {
+      "file": "milkyway.rgb9e5.gz",
+      "bytes": 31969056,
+      "sha256": "5db9391e2e67380c9ba82eb4b4c3c981ad836c3f8967098e1182c7580efbc0d3"
+    },
+    {
+      "file": "bright-stars.bin.gz",
+      "bytes": 94390,
+      "sha256": "09dde4514ddffc650c4e3e56e94577e769ed8cf6ae8049c02747916c0e6f54fb"
+    }
+  ],
+  "software": {
+    "OpenEXR": "3.5.2",
+    "numpy": "2.5.4"
+  }
+}

@@ -10,5 +10,5 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Minecraft.class)
 public abstract class MinecraftMixin {
     @Inject(method="close()V",at=@At("HEAD"))
-    private void overheaven$close(CallbackInfo callback) { BlackHoleRenderer.INSTANCE.close(); }
+    private void overheaven$close(CallbackInfo callback) { BlackHoleRenderer.INSTANCE.close(); com.mega.overheaven.foliagecompat.blackhole.client.FinaleClient.clear(); }
 }

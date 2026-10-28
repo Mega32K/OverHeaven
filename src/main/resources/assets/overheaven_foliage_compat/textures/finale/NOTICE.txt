@@ -1,0 +1,17 @@
+Deep Star Maps 2020 — NASA SVS visualization 4851
+
+Credit: NASA/Goddard Space Flight Center Scientific Visualization Studio.
+Visualization: Ernie Wright (USRA). Gaia DR2: ESA/Gaia/DPAC.
+Original star positions/colors compiled from Hipparcos-2, Tycho-2, Gaia DR2
+and the supplementary catalogs documented at the source page.
+
+Source: https://svs.gsfc.nasa.gov/4851/
+Usage statement: https://svs.gsfc.nasa.gov/help/
+NASA SVS states its content is public domain unless otherwise noted.
+No constellation figures, logos, music or video were used.
+
+These are modified game assets, not scientific catalog data or a NASA product.
+The galaxy map was filtered, downsampled and packed as linear RGB9_E5.
+Resolved bright sources were extracted and assigned compressed visual flux.
+See SOURCE.json for original and derived file hashes.
+Reproduction script: tools/prepare_finale_sky.py (offline build-time tool).

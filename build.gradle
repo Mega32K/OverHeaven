@@ -35,6 +35,7 @@ mixin {
     add sourceSets.main, "${mod_id}.refmap.json"
     config "${mod_id}.mixins.json"
     config "${mod_id}.blackhole.mixins.json"
+    config "${mod_id}.finale.mixins.json"
 }
 repositories {
     maven { url = 'https://maven.minecraftforge.net/' }
@@ -90,7 +91,7 @@ tasks.named('processResources', ProcessResources).configure {
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props }
 }
 tasks.named('jar', Jar).configure {
-    manifest { attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}.blackhole.mixins.json", 'Implementation-Version': mod_version) }
+    manifest { attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}.blackhole.mixins.json,${mod_id}.finale.mixins.json", 'Implementation-Version': mod_version) }
     finalizedBy 'reobfJar'
 }
 tasks.withType(JavaCompile).configureEach {
@@ -193,4 +194,99 @@ tasks.register('verifyBlackHoleEnvironment', JavaExec) {
     mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.BlackHoleEnvironmentVerification'
     args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
          file('audit/lens-layers-2026-10-26/environment').absolutePath
+}
+
+// Explicit finale checks: intentionally independent of jar/reobfJar/check.
+tasks.register('verifySingularityGlareGpu', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.SingularityGlareGpuVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/singularity-distance-glare-2026-10-27/gpu').absolutePath,
+         file('audit/singularity-distance-glare-2026-10-27/before/src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath
+}
+tasks.register('verifyShockwaveGpu', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.ShockwaveGpuVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/shockwave-2026-10-27/gpu').absolutePath,
+         file('audit/shockwave-2026-10-27/before/src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath
+    if (project.hasProperty('shockwavePreviewEncoder')) args project.property('shockwavePreviewEncoder')
+}
+tasks.register('verifyFinaleChoreography', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.finale.FinaleChoreographyVerification'
+}
+tasks.register('verifyFinaleReimaginedGpu', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.FinaleReimaginedGpuVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/finale-reimagined-2026-10-27/gpu').absolutePath,
+         file('audit/finale-reimagined-2026-10-27/before/src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('run/shaderpacks/ComplementaryUnbound_r5.9.3.zip').absolutePath
+    if (project.hasProperty('finalePreviewEncoder')) args project.property('finalePreviewEncoder')
+}
+tasks.register('verifyFinale', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.FinaleVerification'
+}
+tasks.register('verifyFinaleGpu', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.FinaleGpuVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/finale-2026-10-26/gpu').absolutePath
+}
+
+tasks.register('verifyFinaleRecovery', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.finale.FinaleRecoveryVerification'
+}
+
+// Source switching, actual selected-pack GLSL, and singularity membrane regression; no packaging.
+tasks.register('verifySingularityGpu', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.SingularityGpuVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/singularity-bubbles-2026-10-26/gpu').absolutePath,
+         file('run/shaderpacks/ComplementaryUnbound_r5.9.3.zip').absolutePath
+}
+
+tasks.register('verifyFinaleFlashGpu', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.FinaleFlashGpuVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/finale-flash-2026-10-26/gpu').absolutePath
+}
+
+// Explicit checks; neither task produces a distributable JAR.
+tasks.register('verifyFinaleFeedback', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.FinaleFeedbackVerification'
+}
+tasks.register('verifyFinaleFeedbackGpu', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.FinaleFeedbackGpuVerification'
+    args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+         file('audit/wave-feedback-sky-2026-10-28/gpu').absolutePath
 }

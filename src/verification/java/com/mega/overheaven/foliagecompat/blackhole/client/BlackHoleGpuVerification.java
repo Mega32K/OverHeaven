@@ -27,7 +27,7 @@ public final class BlackHoleGpuVerification {
     private static final Matrix4f PROJECTION=new Matrix4f().perspective((float)Math.toRadians(60),WIDTH/(float)HEIGHT,0.05f,4096);
     private static final Matrix4f INVERSE=new Matrix4f(PROJECTION).invert();
     private static void check(boolean value,String message) { if(!value) throw new AssertionError(message); checks++; }
-    private static String source(String name) throws Exception { String text=Files.readString(resources.resolve(name)); return text.contains("#include \"field.glsl\"")?text.replace("#include \"field.glsl\"",source("field.glsl")):text; }
+    private static String source(String name) throws Exception { return VerificationShaders.read(resources,name); }
     private static GlDiskTexture detail() throws Exception {
         try(var stream=Files.newInputStream(resources.resolve("../../textures/blackhole/disk_detail.png").normalize())) { return new GlDiskTexture(stream); }
     }

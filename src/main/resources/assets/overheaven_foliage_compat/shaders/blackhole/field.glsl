@@ -18,6 +18,12 @@ uniform float Lensing;
 uniform float Glow;
 uniform float Time;
 uniform float Seed;
+uniform float FinaleAmount;
+uniform float FinaleProgress;
+uniform float FinaleTime;
+uniform float FinalePulse;
+uniform int FinalePhase;
+float coreRadius() { return Radius*(1.0-clamp(FinaleAmount,0.0,1.0)); }
 uniform int Steps;
 uniform float PixelAngle;
 uniform sampler2D DiskTexture;
@@ -93,6 +99,7 @@ vec3 environmentLens(vec2 uv,vec3 direction,float opaque,vec2 bounds) {
     float a=first-along, b=last-along;
     float integral=b/sqrt(softened+b*b)-a/sqrt(softened+a*a);
     float angle=min(1.2,0.4*Radius*Lensing*impact/softened*max(0.0,integral)*window);
+    angle*=mix(1.0,0.42*smoothstep(0.0,Radius*0.8,impact),FinaleAmount);
     vec3 outgoing=direction*cos(angle)+(transverse/impact)*sin(angle);
     // w=0 projects a direction, with no arbitrary sky plane or near/far cutoff.
     vec4 projected=VP*vec4(outgoing,0.0);
@@ -103,14 +110,14 @@ vec3 environmentLens(vec2 uv,vec3 direction,float opaque,vec2 bounds) {
     return vec3(source,guard);
 }
 struct Field { vec4 front; vec4 back; vec4 lens; vec4 meta; };
-Field integrate(vec2 uv) {
+Field ordinaryField(vec2 uv) {
     vec3 direction = rayAt(uv), origin = Eye - Center;
     float opaque = distanceAt(uv, texture(OpaqueDepth, uv).r);
     float surface = distanceAt(uv, texture(SurfaceDepth, uv).r);
     bool transparent = surface < opaque - max(0.002, opaque * 0.00001);
     if (!transparent) surface = opaque;
     vec2 bounds = sphere(origin, direction, Outer * 1.35 + Thickness * 2.0);
-    vec2 core = sphere(origin, direction, Radius);
+    vec2 core = sphere(origin, direction, max(coreRadius(),0.000001));
     float coreHit = core.y > 0.0 ? max(0.0, core.x) : 1000000.0;
     Field result;
     result.front = vec4(0.0,0.0,0.0,1.0); result.back = result.front;
@@ -202,4 +209,115 @@ Field integrate(vec2 uv) {
         travel += stepSize; position = nextPosition; velocity = nextVelocity;
     }
     return result;
+}
+
+// Singularity radiance has the same opaque/transparent segmentation as the ordinary disk.
+void finaleLight(inout Field f,vec3 light,float distance,float opaque,float surface) {
+    if(distance<0.0 || distance>=opaque || max(light.r,max(light.g,light.b))<0.000001) return;
+    if(distance<surface) { f.front.rgb+=light; f.lens.z=min(f.lens.z,distance); }
+    else { f.back.rgb+=light; f.lens.w=min(f.lens.w,distance); }
+}
+float finaleRadius() {
+    float contraction=FinalePhase==4?smoothstep(0.,1.,FinaleProgress):FinalePhase>4?1.:0.;
+    return max(Radius*mix(1.,.32,contraction),.001);
+}
+float finaleEmission() {
+    if(FinalePhase==3) return mix(1.,.17,smoothstep(.35,1.,FinaleProgress));
+    if(FinalePhase==4) return mix(.17,.025,smoothstep(0.,1.,FinaleProgress));
+    if(FinalePhase==5) return mix(.025,.0015,smoothstep(0.,1.,FinaleProgress));
+    if(FinalePhase==6) return .0015*(1.-smoothstep(.35,.625,FinaleProgress));
+    if(FinalePhase==7) return 0.;
+    return 1.;
+}
+vec3 finaleLocal(vec3 position) { return vec3(dot(position,DiskRight),dot(position,DiskNormal),dot(position,DiskForward))/finaleRadius(); }
+// Original world-space thin-film palette. No screen-space radial texture or reference code.
+vec3 finaleFilm(float thickness,float incidence) {
+    vec3 wavelength=vec3(0.650,0.510,0.440);
+    vec3 interference=.5+.5*cos((thickness*(.4+.6*incidence))/wavelength*6.2831853);
+    interference*=interference;
+    return mix(vec3(.42,.50,.65),interference,.87);
+}
+void finaleMembranes(inout Field f,vec3 origin,vec3 ray,float closest,float opaque,float surface,float fade) {
+    // A bounded far hemisphere makes the porous veil a background to the luminous center.
+    // Texture coordinates remain in the disk's world basis when the camera turns or moves.
+    float sourceRadius=finaleRadius();
+    vec2 range=sphere(origin,ray,sourceRadius*1.5);
+    float lo=max(max(range.x,0.),closest+sourceRadius*.10),hi=min(range.y,opaque);
+    if(hi>lo) {
+        int count=Steps<=24?12:Steps<=48?20:28;
+        float stride=(hi-lo)/float(count);
+        for(int i=0;i<28;i++) {
+            if(i>=count) break;
+            float t=lo+(float(i)+.5)*stride;
+            vec3 p=finaleLocal(origin+ray*t),q=p*3.15;
+            float time=FinaleTime*.21+Seed*.017;
+            // Unequal twists and a second, weaker fold create connected cavities rather than rings.
+            float twist=.43*sin(p.y*1.7-time)+.27*p.y;
+            q.xz=mat2(cos(twist),-sin(twist),sin(twist),cos(twist))*q.xz;
+            q+=.31*sin(q.yzx*1.36+vec3(time,-time*.71,time*.43));
+            q+=.11*sin(q.zxy*2.73-vec3(time*.6));
+            float sheet=dot(sin(q),cos(q.yzx));
+            float thickness=max(.13,stride/sourceRadius*3.5);
+            float membrane=exp(-sheet*sheet/(thickness*thickness))*.13/thickness;
+            float envelope=(1.-smoothstep(1.04,1.5,length(p)))*smoothstep(.18,.5,length(p));
+            float folds=.32+.68*pow(.5+.5*sin(q.x-q.z+time),2.);
+            vec3 tint=finaleFilm(.52+.30*sin(q.y+q.z*.7-time)+.16*p.x,.7);
+            vec3 light=tint*membrane*envelope*folds*stride/sourceRadius*Brightness*.78*fade;
+            finaleLight(f,light,t,opaque,surface);
+        }
+    }
+    // Three overlapping small membranes form one chromatic center, not orbiting satellites.
+    // Analytic intersections keep the thin fronts stable even at the low sample budget.
+    for(int cell=0;cell<3;cell++) {
+        vec3 localOffset=cell==0?vec3(-.055,.022,.024):cell==1?vec3(.054,-.034,.006):vec3(.008,.057,-.038);
+        vec3 offset=(DiskRight*localOffset.x+DiskNormal*localOffset.y+DiskForward*localOffset.z)*sourceRadius;
+        float size=sourceRadius*(cell==0?.200:cell==1?.175:.145);
+        vec2 hits=sphere(origin-offset,ray,size);
+        if(hits.y<=0.) continue;
+        for(int side=0;side<2;side++) {
+            float t=side==0?hits.x:hits.y;
+            if(t<0. || t>=opaque) continue;
+            vec3 normal=normalize(origin+ray*t-offset),p=finaleLocal(origin+ray*t);
+            float incidence=abs(dot(normal,ray));
+            float flow=sin(dot(p,vec3(16,23,-11))+FinaleTime*.44)+.5*sin(dot(p,vec3(-31,12,18))-FinaleTime*.27);
+            float patches=smoothstep(-.65,.55,flow);
+            float rim=pow(1.-incidence,2.3);
+            vec3 tint=finaleFilm(.46+.16*flow+.045*float(cell),incidence);
+            vec3 light=tint*(.10+rim*1.8)*patches*Brightness*2.1*fade;
+            light+=vec3(1.,.985,.97)*pow(patches,5.)*pow(rim,3.)*Brightness*1.7*fade;
+            finaleLight(f,light,t,opaque,surface);
+        }
+    }
+}
+#include "finale_energy.glsl"
+Field finaleField(vec2 uv) {
+    vec3 direction=rayAt(uv),origin=Eye-Center;
+    float opaque=distanceAt(uv,texture(OpaqueDepth,uv).r),surface=distanceAt(uv,texture(SurfaceDepth,uv).r);
+    if(surface>=opaque-max(.002,opaque*.00001)) surface=opaque;
+    Field f; f.front=vec4(0,0,0,1); f.back=f.front; f.lens=vec4(uv,65504,65504); f.meta=vec4(opaque,surface,0,-1);
+    float closest=-dot(origin,direction),impact=length(origin+direction*max(closest,0.));
+    float fade=finaleEmission();
+    finaleMembranes(f,origin,direction,closest,opaque,surface,fade);
+    float pointWidth=max(finaleRadius()*.021,max(closest,1.)*PixelAngle*.75);
+    float point=exp(-impact*impact/(pointWidth*pointWidth));
+    // Finite corona feeds the existing HDR pyramid; high brightness is confined to the focus.
+    float coronaWidth=max(finaleRadius()*.095,max(closest,1.)*PixelAngle);
+    float corona=exp(-impact*impact/(coronaWidth*coronaWidth));
+    vec3 pointLight=vec3(1.,.985,.965)*(point*(14.+FinalePulse*22.)+corona*(.58+FinalePulse*1.8))*Brightness*fade;
+    finaleLight(f,pointLight,closest,opaque,surface);
+    vec2 bounds=sphere(origin,direction,Outer*1.35+Thickness*2.);
+    if(bounds.y>0. && max(bounds.x,0.)<opaque) {
+        vec3 mapping=environmentLens(uv,direction,opaque,bounds); f.lens.xy=mapping.xy; f.meta.w=mapping.z;
+    }
+    finaleEnergy(f,origin,direction,opaque,surface,fade);
+    return f;
+}
+Field integrate(vec2 uv) {
+    if(FinaleAmount<=.00001) return ordinaryField(uv);
+    Field show=finaleField(uv);
+    if(FinaleAmount>=.99999) return show;
+    Field base=ordinaryField(uv);
+    base.front=mix(base.front,show.front,FinaleAmount); base.back=mix(base.back,show.back,FinaleAmount);
+    base.lens=mix(base.lens,show.lens,FinaleAmount);
+    return base;
 }

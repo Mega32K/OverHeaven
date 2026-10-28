@@ -1,0 +1,57 @@
+package com.mega.overheaven.foliagecompat.finale;
+
+import java.util.List;
+
+public final class FinaleChoreography {
+    private static final double[] SPEEDS={.008,.028,.12,.32,-.26,-.82,-2.1,-.025,0};
+    public record Motion(double angle,double speed) { }
+    public record Cue(FinaleTimeline.Phase phase,double fraction,String sound,boolean glass,float gain) { }
+    public static final List<Cue> CUES=List.of(
+        new Cue(FinaleTimeline.Phase.EXPOSE,.01875,"ignite",false,.62f),
+        new Cue(FinaleTimeline.Phase.SUMMON,.06,"pulse",false,.48f),
+        new Cue(FinaleTimeline.Phase.SUMMON,.37,"pulse",false,.62f),
+        new Cue(FinaleTimeline.Phase.SUMMON,.66,"pulse",false,.78f),
+        new Cue(FinaleTimeline.Phase.FRACTURE,.10,"crack",true,.35f),
+        new Cue(FinaleTimeline.Phase.FRACTURE,.36,"crack",true,.5f),
+        new Cue(FinaleTimeline.Phase.FRACTURE,.62,"crack",true,.66f),
+        new Cue(FinaleTimeline.Phase.FRACTURE,.80,"rupture",true,.76f),
+        new Cue(FinaleTimeline.Phase.FRACTURE,.80,"impact",false,.8f),
+        new Cue(FinaleTimeline.Phase.REVERSE,.12,"reverse",false,.65f),
+        new Cue(FinaleTimeline.Phase.REVERSE,.93,"time_break",false,.6f),
+        new Cue(FinaleTimeline.Phase.UNWEAVE,.24,"fold",false,.5f),
+        new Cue(FinaleTimeline.Phase.UNWEAVE,.58,"fold",false,.6f),
+        new Cue(FinaleTimeline.Phase.UNWEAVE,.84,"fold",false,.72f));
+    private FinaleChoreography() { }
+    public static Motion motion(FinaleTimeline timeline,double ticks) {
+        double remaining=Math.max(0,Math.min(timeline.total(),ticks)),angle=0,speed=SPEEDS[0];
+        for(var phase:FinaleTimeline.Phase.values()) {
+            int index=phase.ordinal(); double duration=timeline.duration(phase),progress=Math.min(1,remaining/duration);
+            double integral=progress*progress*progress*(1-progress*.5);
+            angle+=duration/20*(SPEEDS[index]*progress+(SPEEDS[index+1]-SPEEDS[index])*integral);
+            speed=SPEEDS[index]+(SPEEDS[index+1]-SPEEDS[index])*FinaleTimeline.smooth(0,1,progress);
+            if(remaining<=duration) break;
+            remaining-=duration;
+        }
+        return new Motion(angle,speed);
+    }
+    public static double stem(int layer,FinaleTimeline.Frame frame) {
+        double progress=frame.progress();
+        return switch(frame.phase()) {
+            case EXPOSE -> switch(layer) { case 0 -> .42*FinaleTimeline.smooth(.035,.18,progress); case 3 -> .08*FinaleTimeline.smooth(.12,.8,progress); default -> 0; };
+            case SUMMON -> switch(layer) { case 0 -> .42; case 1 -> .34*FinaleTimeline.smooth(0,1,progress); case 2 -> .12*progress; default -> .08+.12*progress; };
+            case FRACTURE -> switch(layer) { case 0 -> .42*(1-.65*FinaleTimeline.smooth(.8,1,progress)); case 1 -> (.34+.16*progress)*(1-FinaleTimeline.smooth(.8,.88,progress)); case 2 -> .12+.16*FinaleTimeline.smooth(0,.78,progress); default -> .20; };
+            case REVERSE -> switch(layer) { case 0 -> .147*(1-progress); case 1 -> .22*FinaleTimeline.smooth(.16,.4,progress)*(1-progress); case 2 -> .28*(1-.7*progress); default -> .2+.18*FinaleTimeline.smooth(.12,.75,progress); };
+            case UNWEAVE -> switch(layer) { case 1 -> .14*Math.sin(progress*Math.PI); case 2 -> .084+.20*FinaleTimeline.smooth(0,1,progress); case 3 -> .38+.08*Math.sin(progress*Math.PI); default -> 0; };
+            case EXTINGUISH -> switch(layer) { case 1 -> .09*Math.sin(progress*Math.PI)*(1-FinaleTimeline.smooth(.22,.68,progress)); case 2 -> .284*(1-FinaleTimeline.smooth(.08,.65,progress)); case 3 -> .007+.373*(1-FinaleTimeline.smooth(.25,.97,progress)); default -> 0; };
+            case SILENCE -> layer==3?.007*(1-FinaleTimeline.smooth(0,.38,progress)):0;
+            case RETURN -> 0;
+        };
+    }
+    public static double pitch(int layer,FinaleTimeline.Frame frame) {
+        double progress=frame.progress();
+        int phase=frame.phase().ordinal();
+        if(layer==0) return phase<3?1+.10*FinaleTimeline.smooth(0,3,phase+progress):1.1-.48*FinaleTimeline.smooth(0,1,progress);
+        if(layer==2) return phase<3?.65+.35*FinaleTimeline.smooth(0,3,phase+progress):phase==3?1-.45*progress:phase==4?.55+.85*progress:1.4-.85*progress;
+        return 1;
+    }
+}

@@ -19,6 +19,18 @@ public final class BlackHoleContractVerification {
         try(var jar=new JarFile(arguments[0])) {
             for(String target:OculusContract.TARGETS) try(var stream=jar.getInputStream(jar.getJarEntry(target.replace('.','/')+".class"))) { nodes.put(target,node(stream.readAllBytes())); }
         }
+        try(var jar=new JarFile(arguments[0])) {
+            String[][] skyApi={
+                {"shaderpack/ShaderPack","getShaderPackOptions","()Lnet/irisshaders/iris/shaderpack/option/ShaderPackOptions;"},
+                {"shaderpack/option/ShaderPackOptions","getOptionValues","()Lnet/irisshaders/iris/shaderpack/option/values/OptionValues;"},
+                {"shaderpack/option/values/OptionValues","getStringValueOrDefault","(Ljava/lang/String;)Ljava/lang/String;"}
+            };
+            for(String[] api:skyApi) {
+                try(var stream=jar.getInputStream(jar.getJarEntry("net/irisshaders/iris/"+api[0]+".class"))) {
+                    check(node(stream.readAllBytes()).methods.stream().anyMatch(m->m.name.equals(api[1])&&m.desc.equals(api[2])),"actual Oculus pack sky API "+api[1]);
+                }
+            }
+        }
         check(OculusContract.rejection(nodes)==null,"actual Oculus 1.8.0 injection contract");
         for(String target:OculusContract.TARGETS) { var removed=nodes.remove(target); check(OculusContract.rejection(nodes)!=null,"missing target safely rejected "+target); nodes.put(target,removed); }
         var pipeline=nodes.get(OculusContract.PIPELINE); var field=pipeline.fields.stream().filter(value -> value.name.equals("renderTargets")).findFirst().orElseThrow();
