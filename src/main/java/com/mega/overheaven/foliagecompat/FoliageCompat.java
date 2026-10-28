@@ -13,6 +13,8 @@ public final class FoliageCompat {
         PlayingCards.register(context.getModEventBus());
         com.mega.overheaven.foliagecompat.blackhole.BlackHoleNetwork.init();
         com.mega.overheaven.foliagecompat.finale.FinaleNetwork.init();
+        com.mega.overheaven.foliagecompat.pixeltp.PixelTpNetwork.init();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.mega.overheaven.foliagecompat.pixeltp.PixelTpManager());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.mega.overheaven.foliagecompat.finale.FinaleEvents());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.mega.overheaven.foliagecompat.blackhole.BlackHoleEvents());
     }

@@ -7,7 +7,12 @@ public final class FinaleChoreography {
     public record Motion(double angle,double speed) { }
     public record Cue(FinaleTimeline.Phase phase,double fraction,String sound,boolean glass,float gain) { }
     public static final List<Cue> CUES=List.of(
-        new Cue(FinaleTimeline.Phase.EXPOSE,.01875,"ignite",false,.62f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,.02,"causal_charge",false,.48f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,.175,"causal_fault",false,.38f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,.265,"causal_fault",false,.48f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,.355,"causal_fault",false,.58f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,CausalTransition.RELEASE,"causal_release",false,.85f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,CausalTransition.REVEALED,"causal_recoil",false,.64f),
         new Cue(FinaleTimeline.Phase.SUMMON,.06,"pulse",false,.48f),
         new Cue(FinaleTimeline.Phase.SUMMON,.37,"pulse",false,.62f),
         new Cue(FinaleTimeline.Phase.SUMMON,.66,"pulse",false,.78f),
@@ -37,7 +42,7 @@ public final class FinaleChoreography {
     public static double stem(int layer,FinaleTimeline.Frame frame) {
         double progress=frame.progress();
         return switch(frame.phase()) {
-            case EXPOSE -> switch(layer) { case 0 -> .42*FinaleTimeline.smooth(.035,.18,progress); case 3 -> .08*FinaleTimeline.smooth(.12,.8,progress); default -> 0; };
+            case EXPOSE -> CausalTransition.stem(layer,progress);
             case SUMMON -> switch(layer) { case 0 -> .42; case 1 -> .34*FinaleTimeline.smooth(0,1,progress); case 2 -> .12*progress; default -> .08+.12*progress; };
             case FRACTURE -> switch(layer) { case 0 -> .42*(1-.65*FinaleTimeline.smooth(.8,1,progress)); case 1 -> (.34+.16*progress)*(1-FinaleTimeline.smooth(.8,.88,progress)); case 2 -> .12+.16*FinaleTimeline.smooth(0,.78,progress); default -> .20; };
             case REVERSE -> switch(layer) { case 0 -> .147*(1-progress); case 1 -> .22*FinaleTimeline.smooth(.16,.4,progress)*(1-progress); case 2 -> .28*(1-.7*progress); default -> .2+.18*FinaleTimeline.smooth(.12,.75,progress); };
@@ -50,6 +55,7 @@ public final class FinaleChoreography {
     public static double pitch(int layer,FinaleTimeline.Frame frame) {
         double progress=frame.progress();
         int phase=frame.phase().ordinal();
+        if(phase==0) return layer==0?1+.025*Math.sin(progress*19)*(1-FinaleTimeline.smooth(.6,1,progress)):1+.25*FinaleTimeline.smooth(.175,.53,progress)*(1-FinaleTimeline.smooth(.57,.825,progress));
         if(layer==0) return phase<3?1+.10*FinaleTimeline.smooth(0,3,phase+progress):1.1-.48*FinaleTimeline.smooth(0,1,progress);
         if(layer==2) return phase<3?.65+.35*FinaleTimeline.smooth(0,3,phase+progress):phase==3?1-.45*progress:phase==4?.55+.85*progress:1.4-.85*progress;
         return 1;

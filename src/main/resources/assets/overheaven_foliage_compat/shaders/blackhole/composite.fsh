@@ -143,8 +143,8 @@ void main() {
     vec3 radiance=field.front.rgb+field.front.a*transmission*field.back.rgb;
     vec3 baseColor=field.front.a*(surfaceRadiance+transmission*field.back.a*background);
     float impact=length(cross(Eye-Center,direction));
-    float rim=exp(-abs(impact-Radius)/max(fwidth(impact)*1.3,Radius*0.003));
-    vec3 rimLight=FinaleAmount<0.99999 && core.y>0.0 && coreHit<opaque?innerTransitionColor(HotColor,Radius)*rim*Brightness*0.18:vec3(0.0);
+    float rim=exp(-abs(impact-coreRadius())/max(fwidth(impact)*1.3,Radius*0.003));
+    vec3 rimLight=FinaleAmount<0.99999 && core.y>0.0 && coreHit<opaque?innerTransitionColor(HotColor,Radius)*rim*Brightness*0.18*(1.+(IntroEnabled!=0?IntroTighten*4.:0.)):vec3(0.0);
     radiance+=rimLight*(coreHit<surface?vec3(1.0):transmission);
     vec3 bloom=bloomAt(texCoord,opaque)+distantGlare;
     if(LayerMode==1) { Color=vec4(max(vec3(0.0),surfaceRadiance+transmission*(field.back.rgb+field.back.a*background+(coreHit>=surface?rimLight:vec3(0.0)))+bloom),host.a); return; }

@@ -6,50 +6,44 @@ public final class FinaleFeedbackVerification {
     private static int checks;
     private static void check(boolean value,String description) { if(!value) throw new AssertionError(description);checks++; }
     private static boolean near(double a,double b) { return Math.abs(a-b)<1.e-6; }
-    private static double legacy(double radius,double outer,double thickness,double age) {
-        double extent=FinaleWaves.extent(radius,outer,thickness),launch=Math.max(0,Math.min(1,(age-.09)/.91));
-        double travel=.4*(1-Math.exp(-launch*6))/(1-Math.exp(-6))+.6*launch;
-        double charge=radius*(.44-.16*FinaleTimeline.smooth(0,.09,age));
-        return charge+(extent*.86-charge)*travel;
-    }
     public static void main(String[] args) {
         var timeline=FinaleTimeline.defaults();var state=new FinaleWaves.State();
+        check(FinaleWaves.easeInExpo(0)==0 && FinaleWaves.easeInExpo(1)==1,"normalized IN_EXPO endpoints");
         for(double radius:new double[]{.1,3.2,20,80}) for(double outer:new double[]{radius+2,radius+12,128}) {
             if(outer<=radius) continue;
-            for(int id=0;id<7;id++) for(int i=0;i<=100;i++) {
-                double age=i/100.,start=FinaleWaves.start(timeline,id),duration=FinaleWaves.duration(timeline,id);
-                FinaleWaves.sample(timeline,id,start+duration*age,radius,outer,.16,state);
-                check(near(state.radius,legacy(radius,outer,.16,age)),"same launch curve at 1.5x current speed, including final common range");
-                check(state.support>=state.radius+state.extent*.12,"wave and fragments within culling support");
-            }
             for(int id=0;id<7;id++) {
-                double s=FinaleWaves.start(timeline,id),d=FinaleWaves.duration(timeline,id);
-                double oldDuration=timeline.duration(id<3?FinaleTimeline.Phase.SUMMON:FinaleTimeline.Phase.FRACTURE)
-                    *new double[]{.25,.22,.19,.20,.18,.16,.20}[id]*.5;
-                check(near(d*1.5,oldDuration),"propagation speed exactly 1.5x current, not 3x");
-                double previousTerminal=FinaleWaves.extent(radius,outer,.16)*.86*(id==6?2:1);
+                double start=FinaleWaves.start(timeline,id),charge=FinaleWaves.chargeDuration(timeline,id);
+                double flight=FinaleWaves.flightDuration(timeline,id,radius,outer,.16),base=FinaleWaves.baseVelocity(timeline,id,radius,outer,.16);
+                double d=FinaleWaves.duration(timeline,id),e=FinaleWaves.extent(radius,outer,.16);
+                double oldFlight=d*.91+e*.86/FinaleWaves.endVelocity(radius,e,d);
+                check(near(charge,d*.09/1.25),"charge shortened by 1.25");
+                check(near(base,1.25*(e*1.72-radius*.28)/oldFlight),"base calibrated from old ordinary mean velocity");
+                check(flight<oldFlight*(id==6?2.1:1),"outward lifetime shortened");
+                double previous=-1,integral=0;
+                for(int i=0;i<=1000;i++) {
+                    double u=i/1000.;FinaleWaves.sample(timeline,id,start+charge+flight*u,radius,outer,.16,state);
+                    check(state.velocity>=previous-1e-9,"outward speed monotonically increases");previous=state.velocity;
+                    check(near(state.velocity,base*(1+.75*(Math.pow(2,10*u)-1)/1023)),"velocity follows IN_EXPO");
+                    check(state.support>=state.radius+state.extent*.12,"wave within culling support");
+                    integral+=state.velocity*flight/1000*(i==0||i==1000?.5:1);
+                    if(i>0&&i<1000) {
+                        double saved=state.radius,epsilon=flight*.00001;
+                        FinaleWaves.sample(timeline,id,start+charge+flight*u+epsilon,radius,outer,.16,state);
+                        check(Math.abs((state.radius-saved)/epsilon-previous)<base*.0001,"radius derivative equals velocity");
+                    }
+                }
+                double target=e*1.72*(id==6?2:1);
+                check(near(previous,base*1.75),"terminal speed 1.75x base");
+                check(Math.abs(integral-(target-radius*.28))<target*.00001,"numerical integral matches retained travel distance");
                 double expiry=FinaleWaves.end(timeline,id,radius,outer,.16);
                 FinaleWaves.sample(timeline,id,expiry,radius,outer,.16,state);
-                check(near(state.radius,2*previousTerminal),"all seven terminal radii double");
-                check(state.impulse==0,"every wave expires smoothly");
-                if(id<6) check(expiry<FinaleWaves.start(timeline,id+1),"extended waves never hide the next launch");
-                FinaleWaves.sample(timeline,id,s+d-.001,radius,outer,.16,state);double l=state.radius;
-                FinaleWaves.sample(timeline,id,s+d,radius,outer,.16,state);double m=state.radius;
-                FinaleWaves.sample(timeline,id,s+d+.001,radius,outer,.16,state);
-                check(Math.abs((m-l)-(state.radius-m))<radius*1.e-7,"every extension has continuous velocity");
-                check(near((state.radius-m)/.001,1.5*FinaleWaves.endVelocity(radius,FinaleWaves.extent(radius,outer,.16),oldDuration)),"extended travel keeps precisely 1.5x previous terminal speed");
+                check(near(state.radius,target)&&state.impulse==0,"unchanged radius and zero terminal radiation");
+                if(id<6)check(expiry<FinaleWaves.start(timeline,id+1),"no hidden next launch");
             }
-            double finish=FinaleWaves.end(timeline,6,radius,outer,.16);
-            FinaleWaves.sample(timeline,6,finish,radius,outer,.16,state);
-            check(near(state.radius,2*FinaleWaves.terminal(radius,outer,.16)),"final wave exactly double terminal radius");
-            check(state.impulse==0,"expiry radiance zero");
         }
-        double start=FinaleWaves.start(timeline,6),normalEnd=start+FinaleWaves.duration(timeline,6),finish=FinaleWaves.end(timeline,6,3.2,11,.16);
+        check(near(FinaleWaves.baseVelocity(timeline,3,3.2,11,.16),FinaleWaves.baseVelocity(timeline,6,3.2,11,.16)),"final double range shares equivalent ordinary base speed");
+        double start=FinaleWaves.start(timeline,6),finish=FinaleWaves.end(timeline,6,3.2,11,.16);
         check(start==808,"impact start unchanged");check(finish>timeline.start(FinaleTimeline.Phase.REVERSE),"final wave crosses into reverse");
-        FinaleWaves.sample(timeline,6,normalEnd-.001,3.2,11,.16,state);double before=state.radius;
-        FinaleWaves.sample(timeline,6,normalEnd,3.2,11,.16,state);double at=state.radius;
-        FinaleWaves.sample(timeline,6,normalEnd+.001,3.2,11,.16,state);
-        check(Math.abs((at-before)-(state.radius-at))<1.e-7,"extension preserves terminal speed");
         for(int id:new int[]{0,6}) {
             var feedback=new FinaleWaveFeedback();double s=FinaleWaves.start(timeline,id),end=FinaleWaves.end(timeline,id,3.2,11,.16);
             double maxExposure=0,maxPitch=0;boolean hit=false;double hitTime=0;
@@ -107,6 +101,15 @@ public final class FinaleFeedbackVerification {
         for(int summon:new int[]{4,18,120}) for(int fracture:new int[]{4,18,120}) {
             var custom=timeline.with(FinaleTimeline.Phase.SUMMON,summon).with(FinaleTimeline.Phase.FRACTURE,fracture);
             for(int id=0;id<6;id++) check(FinaleWaves.end(custom,id,3.2,11,.16)<FinaleWaves.start(custom,id+1),"custom stage durations preserve non-overlapping launches");
+        }
+        for(double motion:new double[]{-.1,.1}) {
+            feedback.reset();boolean movingHit=false;
+            for(double tick=start-1;tick<finish+2;tick+=.5) {
+                double distance=18+motion*(tick-start);
+                feedback.update(timeline,tick,3.2,11,.16,0,0,distance,distance,false,false);
+                movingHit|=feedback.crossed(6);
+            }
+            check(movingHit,"moving camera crossing follows accelerated front");
         }
         var adjusted=timeline.with(FinaleTimeline.Phase.FRACTURE,4);
         check(FinaleWaves.start(adjusted,6)==adjusted.impactTicks(),"custom duration keeps impact alignment");

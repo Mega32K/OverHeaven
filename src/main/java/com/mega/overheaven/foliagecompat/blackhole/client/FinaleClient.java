@@ -15,6 +15,7 @@ public final class FinaleClient {
     private static FinaleNetwork.Update state;
     private static int localTicks;
     private static final FinaleWaveFeedback feedback=new FinaleWaveFeedback();
+    private static final CausalTransition.Feedback causalFeedback=new CausalTransition.Feedback();
     private static boolean feedbackDiscontinuity;
     private static net.minecraft.client.CameraType lastCameraType;
     private static net.minecraft.world.entity.Entity lastCameraEntity;
@@ -56,7 +57,7 @@ public final class FinaleClient {
     public static long[] debris() { return debris; }
     public static void fail(Throwable error) { if(state!=null) failedRun=state.run(); com.mega.overheaven.foliagecompat.PatchLog.LOGGER.error("Finale renderer disabled for this session; input, HUD and sound restored",error); clear(); failed=true; }
     public static FinaleWaveFeedback feedback() { return feedback; }
-    public static void resetFeedback() { feedback.reset(); feedbackDiscontinuity=true;lastCameraType=null;lastCameraEntity=null; }
+    public static void resetFeedback() { feedback.reset(); causalFeedback.reset(); feedbackDiscontinuity=true;lastCameraType=null;lastCameraEntity=null; }
     @SubscribeEvent public static void camera(ViewportEvent.ComputeCameraAngles event) {
         if(!active() || OptionalShaders.shadow()) return;
         FinaleRenderer.INSTANCE.warmSky();
@@ -68,10 +69,11 @@ public final class FinaleClient {
         double dx=position.x-hole.x(),dy=position.y-hole.y(),dz=position.z-hole.z();
         feedback.update(state.timeline(),ticks(partial),hole.value("radius"),hole.value("outer"),hole.value("thickness"),
             position.x,position.y,position.z,Math.sqrt(dx*dx+dy*dy+dz*dz),state.paused() || Minecraft.getInstance().isPaused(),feedbackDiscontinuity);
+        causalFeedback.update(state.timeline(),ticks(partial),feedbackDiscontinuity);
         feedbackDiscontinuity=false;
-        event.setPitch(event.getPitch()+(float)feedback.pitch);event.setYaw(event.getYaw()+(float)feedback.yaw);event.setRoll(event.getRoll()+(float)feedback.roll);
+        event.setPitch(event.getPitch()+(float)(feedback.pitch+causalFeedback.pitch));event.setYaw(event.getYaw()+(float)(feedback.yaw+causalFeedback.yaw));event.setRoll(event.getRoll()+(float)(feedback.roll+causalFeedback.roll));
     }
-    public static void clear() { resetFeedback(); state=null; localTicks=0; glass=new long[0]; debris=new long[0]; FinaleAudio.close(); FinaleRenderer.INSTANCE.close(); }
+    public static void clear() { resetFeedback(); state=null; localTicks=0; glass=new long[0]; debris=new long[0]; FinaleAudio.close(); FinaleRenderer.INSTANCE.close(); BlackHoleRenderer.INSTANCE.clearOpening(); }
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { clear(); }
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent event) {
         if(event.phase!=TickEvent.Phase.END) return;

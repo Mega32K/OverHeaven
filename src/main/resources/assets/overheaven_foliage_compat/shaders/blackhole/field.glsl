@@ -23,7 +23,9 @@ uniform float FinaleProgress;
 uniform float FinaleTime;
 uniform float FinalePulse;
 uniform int FinalePhase;
-float coreRadius() { return Radius*(1.0-clamp(FinaleAmount,0.0,1.0)); }
+uniform int IntroEnabled;
+uniform float IntroCharge,IntroTighten,IntroCapture,IntroDisk,IntroBurst,IntroFlow;
+float coreRadius() { return Radius*(IntroEnabled!=0?IntroCapture:1.0-clamp(FinaleAmount,0.0,1.0)); }
 uniform int Steps;
 uniform float PixelAngle;
 uniform sampler2D DiskTexture;
@@ -61,8 +63,8 @@ vec3 diskMaterial(vec2 disk, float footprint) {
     float radius = max(length(disk), 0.001);
     float span = max(Outer - Inner, 0.001);
     float orbit = atan(disk.y, disk.x) / 6.28318530718;
-    orbit -= Time * Rotation * pow(Inner / radius, 1.5) / 6.28318530718;
-    float flow = (radius - Inner + Time * Infall) / span;
+    orbit -= (Time * Rotation + (IntroEnabled!=0?IntroFlow*1.7:0.0)) * pow(Inner / radius, 1.5) / 6.28318530718;
+    float flow = (radius - Inner + Time * Infall + (IntroEnabled!=0?IntroFlow*span*.85:0.0)) / span;
     vec2 base = vec2(orbit, flow);
     vec2 width = vec2(footprint / (6.28318530718 * radius), footprint / span);
     // Include radial orbital shear in the LOD; long-running animation must not shimmer.
@@ -165,12 +167,16 @@ Field ordinaryField(vec2 uv) {
                 float footprint = max(max(travel,1.0)*PixelAngle, subLength*grazing*0.35);
                 vec3 material = diskMaterial(disk,footprint);
                 float height = dot(gas,DiskNormal)/max(Thickness,0.001);
-                float vertical = exp(-height*height*(0.55+material.z*0.35));
+                float vertical = exp(-height*height*(0.55+material.z*0.35)*(1.+(IntroEnabled!=0?IntroTighten*1.5:0.)));
                 float optical = radialMask * material.x * vertical * subLength / max(Thickness,0.02);
                 float absorption = 1.0-exp(-optical*1.4);
                 float heat = pow(clamp((Outer-radius)/(Outer-Inner),0.0,1.0),1.35);
                 vec3 emission = mix(ColdColor,HotColor,smoothstep(0.10,0.74,heat)) * Brightness * (0.16+heat*3.3);
                 emission *= material.y * 0.5;
+                if(IntroEnabled!=0) {
+                    float white=IntroTighten*.88; float lum=dot(emission,vec3(.2126,.7152,.0722));
+                    emission=mix(emission,vec3(lum)*vec3(.94,.975,1.04),white)*(1.+IntroCharge*.55+IntroTighten*2.8);
+                }
                 float doppler = 1.0+0.28*dot(normalize(cross(DiskNormal,gas)),direction);
                 float segmentDistance = travel+midpoint*stepSize;
                 float subBegin = travel+stepSize*mix(begin,end,float(gasTap)*0.5);
@@ -295,8 +301,12 @@ Field finaleField(vec2 uv) {
     float opaque=distanceAt(uv,texture(OpaqueDepth,uv).r),surface=distanceAt(uv,texture(SurfaceDepth,uv).r);
     if(surface>=opaque-max(.002,opaque*.00001)) surface=opaque;
     Field f; f.front=vec4(0,0,0,1); f.back=f.front; f.lens=vec4(uv,65504,65504); f.meta=vec4(opaque,surface,0,-1);
+    vec2 capture=sphere(origin,direction,max(coreRadius(),.000001));
+    float coreHit=capture.y>0.?max(0.,capture.x):1000000.;
+    f.meta.z=coreHit<opaque?1.:0.;
+    opaque=min(opaque,coreHit); // The shrinking horizon still truncates far-side singularity radiation.
     float closest=-dot(origin,direction),impact=length(origin+direction*max(closest,0.));
-    float fade=finaleEmission();
+    float fade=finaleEmission()*(1.+IntroBurst*1.9);
     finaleMembranes(f,origin,direction,closest,opaque,surface,fade);
     float pointWidth=max(finaleRadius()*.021,max(closest,1.)*PixelAngle*.75);
     float point=exp(-impact*impact/(pointWidth*pointWidth));
@@ -317,7 +327,13 @@ Field integrate(vec2 uv) {
     Field show=finaleField(uv);
     if(FinaleAmount>=.99999) return show;
     Field base=ordinaryField(uv);
-    base.front=mix(base.front,show.front,FinaleAmount); base.back=mix(base.back,show.back,FinaleAmount);
-    base.lens=mix(base.lens,show.lens,FinaleAmount);
+    float disk=IntroEnabled!=0?IntroDisk:1.-FinaleAmount;
+    base.front.rgb=base.front.rgb*disk+show.front.rgb*FinaleAmount;
+    base.back.rgb=base.back.rgb*disk+show.back.rgb*FinaleAmount;
+    base.front.a=mix(1.,base.front.a,disk); base.back.a=mix(1.,base.back.a,disk);
+    base.lens.zw=min(base.lens.zw,show.lens.zw);
+    // Both fields share the exact current core/deflection state. Select a valid source;
+    // never interpolate a projection or its guard through an invalid coordinate.
+    if(base.meta.z<.5 && show.meta.w>=0.) { base.lens.xy=show.lens.xy; base.meta.w=show.meta.w; }
     return base;
 }

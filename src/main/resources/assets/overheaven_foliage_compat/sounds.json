@@ -106,5 +106,41 @@
         "attenuation_distance": 32
       }
     ]
+  },
+  "finale.causal_charge": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/causal_charge",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.causal_fault": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/causal_fault",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.causal_release": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/causal_release",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "finale.causal_recoil": {
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:finale/causal_recoil",
+        "stream": false,
+        "attenuation_distance": 32
+      }
+    ]
   }
 }

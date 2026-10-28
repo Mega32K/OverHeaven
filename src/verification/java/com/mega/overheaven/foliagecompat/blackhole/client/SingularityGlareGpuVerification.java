@@ -36,6 +36,7 @@ public final class SingularityGlareGpuVerification {
         final GlProgram compose;
         final Matrix4f projection=new Matrix4f(),view=new Matrix4f(),matrix=new Matrix4f(),inverse=new Matrix4f();
         final Vector4f eye=new Vector4f();
+        double revealPulse;
         int width=960,height=540,phase=1,sourceDraws; float distance=64,radius=3.2f,glow=.7f,brightness=3.2f,amount=1,progress=.5f,fov=70;
         Fixture() throws Exception {
             String prefix="#version 330 core\nin vec2 texCoord;out vec4 Color;uniform int LayerMode;uniform sampler2D Transmission;\n";
@@ -54,7 +55,7 @@ public final class SingularityGlareGpuVerification {
         void clear() {fill(opaque,1,0,0,0);fill(surface,1,0,0,0);fill(transmission,1,1,1,1);}
         float depth(float distance) {matrices();var point=projection.transform(new Vector4f(0,0,-distance,1));return point.z/point.w*.5f+.5f;}
         boolean prepare() {
-            matrices();boolean active=glare.project(matrix,eye,0,0,-distance,radius,amount,glow,brightness,phase,progress,width,height);
+            matrices();boolean active=glare.project(matrix,eye,0,0,-distance,radius,amount,glow,brightness,phase,progress,width,height,revealPulse);
             if(active) {var program=glare.begin();uniforms(program);draw();sourceDraws++;}return active;
         }
         float[] shade(int layer) {result.bind();GlState.fullscreen();compose.use();uniforms(compose);compose.integer("LayerMode",layer);glare.bind(compose);draw();return pixels(result);}
@@ -87,7 +88,13 @@ public final class SingularityGlareGpuVerification {
             int outside=Math.min(fixture.width-1,centerX+(int)Math.ceil(Math.min(fixture.width,fixture.height)*.22)+1);
             expect(values[(centerY*fixture.width+outside)*4]==0,"finite arm support at "+fixture.width+"x"+fixture.height);
         }
-        fixture.resize(960,540);
+        fixture.resize(960,540);fixture.distance=64;double normalPeak=maximum(fixture.render(0));fixture.revealPulse=1;
+        expect(Math.abs(maximum(fixture.render(0))/normalPeak-2)<.0001,"reveal peak exactly twice fully distant glare");
+        fixture.distance=8;
+        expect(maximum(fixture.render(0))>0,"near reveal pulse bypasses distance gate");
+        fixture.glow=0;expect(maximum(fixture.render(0))==0,"reveal pulse obeys glow zero");fixture.glow=.7f;
+        fill(fixture.opaque,fixture.depth(2),0,0,0);expect(maximum(fixture.render(0))==0,"near reveal pulse blocked by wall");fixture.clear();
+        fixture.revealPulse=0;expect(maximum(fixture.render(0))==0,"near glare returns to exact zero after pulse");
     }
     private static void visibility(Fixture fixture)throws Exception {
         fixture.distance=64;fixture.clear();float[] original=fixture.render(0);
@@ -188,7 +195,7 @@ public final class SingularityGlareGpuVerification {
         long window=glfwCreateWindow(64,64,"singularity distant glare",0,0);expect(window!=0,"hidden context");glfwMakeContextCurrent(window);GL.createCapabilities();vao=glGenVertexArrays();GlState.fullscreen();
         REPORT.append("GPU ").append(glGetString(GL_RENDERER)).append(". Synthetic production star/subject/bloom composition, 1920x1080 balanced; excludes Minecraft and host effects.\n");
         try {
-            expect(Files.readString(source.resolve("field.glsl")).equals(Files.readString(before.resolve("field.glsl"))),"ordinary field, lens, singularity and membranes unchanged verbatim");
+            for(String signature:new String[]{"vec3 environmentLens(","void finaleMembranes("}) expect(VerificationShaders.function(source,signature).equals(VerificationShaders.function(before,signature)),"existing lens and membranes unchanged: "+signature);
             // Wave propagation now changes intentionally; verifyShockwaveGpu covers its lens/occlusion contracts.
             try(var fixture=new Fixture()){distances(fixture);errorFree("distance fixtures");visibility(fixture);errorFree("visibility fixtures");timeline(fixture);errorFree("lifecycle fixtures");glUseProgram(0);glBindFramebuffer(GL_FRAMEBUFFER,0);}
             errorFree("fixture cleanup");compositions(before);errorFree("production composition");

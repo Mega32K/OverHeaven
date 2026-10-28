@@ -23,7 +23,7 @@ public final class FinaleAudio {
         if(!own(sound)) return FinaleClient.gameGain();
         if(!FinaleClient.active() || FinaleClient.state().paused()) return 0;
         var f=FinaleClient.frame(0); float value=f.phase()==FinaleTimeline.Phase.SILENCE?(float)(1-FinaleTimeline.smooth(0,.5,f.progress())):f.phase()==FinaleTimeline.Phase.RETURN?0:1;
-        return value*(FinaleClient.stopping(0)>=0?1-FinaleClient.stopping(0):1);
+        return value*((Voice)sound).envelope()*(FinaleClient.stopping(0)>=0?1-FinaleClient.stopping(0):1);
     }
     public static void tick() {
         if(!FinaleClient.active()) { close(); return; }
@@ -41,7 +41,10 @@ public final class FinaleAudio {
         var timeline=FinaleClient.state().timeline(); double at=timeline.start(phase)+timeline.duration(phase)*fraction;
         if(cursor<at && now>=at && fired.add(phase.id()+":"+fraction+":"+name)) {
             BlockPos pos=spatial?BlockPos.of(FinaleClient.glass()[(int)(fraction*(FinaleClient.glass().length-1))]):null;
-            var voice=new Voice(name,false,pos); voice.volume(cue.gain()); voices.add(voice); Minecraft.getInstance().getSoundManager().play(voice);
+            var voice=new Voice(name,false,pos);
+            if(name.startsWith("causal_")) { voice.causal=true; voice.end=phase==FinaleTimeline.Phase.EXPOSE?timeline.duration(phase)*(name.equals("causal_charge")?.526:name.equals("causal_fault")?Math.min(.526,fraction+.165):name.equals("causal_release")?.7225:.825):at;
+                voice.pitch((float)Math.max(.5,Math.min(2,160.0/timeline.duration(phase)))); }
+            voice.volume(cue.gain()); voices.add(voice); Minecraft.getInstance().getSoundManager().play(voice);
         }
     }
     public static void close() {
@@ -50,6 +53,13 @@ public final class FinaleAudio {
     }
     private static final class Voice extends AbstractTickableSoundInstance {
         private int age;
+        private boolean causal;
+        private double end;
+        float envelope() {
+            if(!causal) return 1;
+            double ticks=FinaleClient.ticks(0),duration=FinaleClient.state().timeline().duration(FinaleTimeline.Phase.EXPOSE);
+            return (float)(1-FinaleTimeline.smooth(end-duration*.0125,end,ticks));
+        }
         Voice(String name,boolean loop,BlockPos position) {
             super(SoundEvent.createVariableRangeEvent(new ResourceLocation(FoliageCompat.MOD_ID,"finale."+name)),SoundSource.AMBIENT,RandomSource.create(0));
             looping=loop; relative=position==null; attenuation=position==null?Attenuation.NONE:Attenuation.LINEAR; volume=loop?0:.7f; pitch=1;
@@ -58,6 +68,6 @@ public final class FinaleAudio {
         void volume(float value) { volume=value; }
         void pitch(float value) { pitch=value; }
         @Override public boolean canStartSilent() { return true; }
-        @Override public void tick() { if(!FinaleClient.active() || !looping && !FinaleClient.state().paused() && ++age>160) stop(); }
+        @Override public void tick() { if(!FinaleClient.active() || causal && FinaleClient.ticks(0)>=end || !looping && !FinaleClient.state().paused() && ++age>160) stop(); }
     }
 }

@@ -37,12 +37,18 @@ final class GlSingularityGlare implements AutoCloseable {
     boolean project(Matrix4f matrix, Vector4f eye, float centerX, float centerY, float centerZ,
                     double radius, double amount, double glow, double brightness,
                     int phase, double progress, int width, int height) {
+        return project(matrix,eye,centerX,centerY,centerZ,radius,amount,glow,brightness,phase,progress,width,height,0);
+    }
+    boolean project(Matrix4f matrix, Vector4f eye, float centerX, float centerY, float centerZ,
+                    double radius, double amount, double glow, double brightness,
+                    int phase, double progress, int width, int height,double revealPulse) {
         enabled = false;
         if (amount <= 0 || glow <= 0 || brightness <= 0 || radius <= 0 || width <= 0 || height <= 0) return false;
         double offsetX = centerX - eye.x, offsetY = centerY - eye.y, offsetZ = centerZ - eye.z;
         double centerDistance = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
         double weight = distanceWeight(centerDistance, radius);
-        double radiance = weight * Math.min(1, amount) * glow * brightness * emission(phase, progress);
+        double pulse=Math.max(0,Math.min(1,revealPulse));
+        double radiance = Math.max(weight * Math.min(1, amount),2*pulse) * glow * brightness * emission(phase, progress);
         if (radiance <= 0 || !Double.isFinite(radiance)) return false;
         matrix.transform(projected.set(centerX, centerY, centerZ, 1));
         if (projected.w <= .00001f || !Float.isFinite(projected.x) || !Float.isFinite(projected.y) || !Float.isFinite(projected.w)) return false;
@@ -51,7 +57,7 @@ final class GlSingularityGlare implements AutoCloseable {
         if (centerU <= 0 || centerU >= 1 || centerV <= 0 || centerV >= 1) return false;
         float edgePixels = Math.min(Math.min(centerU, 1 - centerU) * width, Math.min(centerV, 1 - centerV) * height);
         strength = (float) (radiance * smooth(0, 2, edgePixels));
-        armPixels = (float) (Math.min(width, height) * .22 * (.35 + .65 * Math.sqrt(weight)));
+        armPixels = (float) (Math.min(width, height) * .22 * (.35 + .65 * Math.sqrt(Math.max(weight,pulse))));
         distance = (float) centerDistance;
         this.width = width;
         this.height = height;

@@ -41,12 +41,13 @@ public final class FinaleRenderer implements AutoCloseable {
     static double nearAmount(String id,float partial) {
         if(!FinaleClient.source(id)) return 0;
         var frame=FinaleClient.frame(partial); double amount=1;
-        if(frame.phase()==FinaleTimeline.Phase.EXPOSE) amount=FinaleTimeline.smooth(0,0.01875,frame.progress());
+        if(frame.phase()==FinaleTimeline.Phase.EXPOSE) amount=com.mega.overheaven.foliagecompat.finale.CausalTransition.reveal(frame.progress());
         if(frame.phase()==FinaleTimeline.Phase.RETURN) amount=1-FinaleTimeline.smooth(0,1,frame.progress());
         if(FinaleClient.stopping(partial)>=0) amount*=1-FinaleTimeline.smooth(0,1,FinaleClient.stopping(partial));
         return amount;
     }
     static void nearUniforms(GlProgram program,String id,float partial) {
+        CausalUniforms.subject(program,id,partial);
         if(!FinaleClient.source(id)) { program.scalar("FinaleAmount",0); program.scalar("FinalePulse",0); program.integer("WavePresent",0); program.scalar("WaveSupport",0); program.scalar("GlarePulse",0); return; }
         var frame=FinaleClient.frame(partial);
         var hole=FinaleClient.state().hole();
@@ -58,7 +59,7 @@ public final class FinaleRenderer implements AutoCloseable {
         program.scalar("FinaleOrbit",FinaleChoreography.motion(FinaleClient.state().timeline(),FinaleClient.ticks(partial)).angle());
     }
     public void render(float partial) {
-        if(!FinaleClient.active() || !cameraValid || FinaleClient.coverage(partial)<=0 && FinaleClient.flash(partial)<=0 && FinaleClient.feedback().exposure<=0 && FinaleClient.feedback().chroma<=0) return;
+        if(!FinaleClient.active() || !cameraValid || FinaleClient.coverage(partial)<=0 && FinaleClient.flash(partial)<=0 && FinaleClient.feedback().exposure<=0 && FinaleClient.feedback().chroma<=0 && CausalUniforms.exposure(partial)<=0) return;
         var mc=Minecraft.getInstance(); var target=mc.getMainRenderTarget();
         try(var state=GlState.capture()) {
             if(compose==null) { compose=new GlProgram("finale_composite"); vao=glGenVertexArrays(); }
@@ -81,7 +82,7 @@ public final class FinaleRenderer implements AutoCloseable {
             timing.end(0);
             timing.start(1); glBindFramebuffer(GL_FRAMEBUFFER,target.frameBufferId); glViewport(0,0,width,height); compose.use(); uniforms(compose,partial);
             compose.texture("Scene",0,scene.textures[0]); compose.texture("Cosmos",1,FinaleClient.coverage(partial)>0?cosmicScene.textures[0]:scene.textures[0]);
-            compose.pair("FullSize",width,height); compose.scalar("CameraExposure",FinaleClient.feedback().exposure); compose.scalar("CameraChroma",FinaleClient.feedback().chroma);
+            compose.pair("FullSize",width,height); compose.scalar("CameraExposure",Math.max(FinaleClient.feedback().exposure,CausalUniforms.exposure(partial))); compose.scalar("CameraChroma",FinaleClient.feedback().chroma);
             compose.scalar("Flash",FinaleClient.flash(partial)); compose.scalar("Pulse",FinaleClient.pulse(partial));
             glBindVertexArray(vao); glDrawArrays(GL_TRIANGLES,0,3); timing.end(1);
         } catch(RuntimeException error) { FinaleClient.fail(error); }

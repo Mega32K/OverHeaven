@@ -22,7 +22,7 @@ vec4 extractLight(vec2 uv) {
     float coreHit=core.y>0.0?max(0.0,core.x):1000000.0;
     float impact=length(cross(Eye-Center,direction));
     float rimWidth=max(max(coreHit,1.0)*PixelAngle*1.3,Radius*0.003);
-    float rim=FinaleAmount<0.99999 && coreHit<opaque?exp(-abs(impact-Radius)/rimWidth)*Brightness*0.18:0.0;
+    float rim=FinaleAmount<0.99999 && coreHit<opaque?exp(-abs(impact-coreRadius())/rimWidth)*Brightness*0.18*(1.+(IntroEnabled!=0?IntroTighten*4.:0.)):0.0;
     if(rim>0.00001) {
         vec3 rimColor=innerTransitionColor(HotColor,Radius)*rim;
         if(coreHit<surface) { front.rgb+=rimColor; emissionDepth.x=min(emissionDepth.x,coreHit); }

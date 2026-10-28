@@ -130,9 +130,11 @@ public final class FinaleFlashGpuVerification {
         final Matrix4f projection=new Matrix4f().perspective((float)Math.toRadians(70),W/(float)H,.05f,4096);
         final BlackHoleScreenBounds bounds=new BlackHoleScreenBounds();
         int steps=48;
+        int sceneOpaqueOverride,layerMode,displaySpace=1;
         boolean glareEnabled=true;
         boolean spectrumEnabled=true;
         final boolean programHasWaves;
+        final boolean programHasIntro;
         final FinaleStarMap nasa;
         boolean nasaEnabled=true;
         Pipeline() throws Exception { this(source,null); }
@@ -141,6 +143,7 @@ public final class FinaleFlashGpuVerification {
             if(nasa!=null) { nasa.prepare();while(nasa.loading()) Thread.sleep(5); }
             String vertex=VerificationShaders.read(resources,"fullscreen.vsh");
             programHasWaves=VerificationShaders.read(resources,"finale_energy.glsl").contains("WavePresent");
+            programHasIntro=Files.readString(resources.resolve("field.glsl")).contains("uniform int IntroEnabled;");
             stars=new GlProgram(vertex,starSource==null?VerificationShaders.read(resources,"finale_stars.fsh"):starSource);
             integrate=new GlProgram(vertex,VerificationShaders.read(resources,"integrate.fsh"));
             String compositeSource=VerificationShaders.read(resources,"composite.fsh");
@@ -182,13 +185,16 @@ public final class FinaleFlashGpuVerification {
             var matrix=new Matrix4f(projection).mul(view); var inverse=new Matrix4f(matrix).invert(); var eye=inverse.transform(new Vector4f(0,0,1,0)); eye.div(eye.w);
             program.matrix("VP",matrix); program.matrix("InverseVP",inverse); program.vector("Eye",eye.x,eye.y,eye.z); program.vector("Center",centerX,0,centerZ);
             double amount=sourceHole?1:0;
-            if(sourceHole && frame.phase()==FinaleTimeline.Phase.EXPOSE) amount=FinaleTimeline.smooth(0,.01875,frame.progress());
+            if(sourceHole && frame.phase()==FinaleTimeline.Phase.EXPOSE) amount=(programHasIntro?com.mega.overheaven.foliagecompat.finale.CausalTransition.reveal(frame.progress()):FinaleTimeline.smooth(0,.01875,frame.progress()));
             if(sourceHole && frame.phase()==FinaleTimeline.Phase.RETURN) amount=1-FinaleTimeline.smooth(0,1,frame.progress());
             if(programHasWaves) {
                 var wave=new com.mega.overheaven.foliagecompat.finale.FinaleWaves.State();
                 if(sourceHole) com.mega.overheaven.foliagecompat.finale.FinaleWaves.evaluate(TIMELINE,ticks,3.2,11,.16,wave);
                 FinaleWaveUniforms.apply(program,wave); program.integer("TestSpectrumDisabled",spectrumEnabled?0:1);
             }
+            var intro=new com.mega.overheaven.foliagecompat.finale.CausalTransition.State();
+            if(sourceHole) com.mega.overheaven.foliagecompat.finale.CausalTransition.evaluate(TIMELINE,ticks,-1,intro);
+            CausalUniforms.apply(program,intro);
             program.scalar("GlarePulse",sourceHole?com.mega.overheaven.foliagecompat.finale.FinaleWaves.flare(TIMELINE,ticks):0);
             program.scalar("FinaleTime",ticks/20); program.scalar("Time",41.2); program.scalar("FinaleAmount",amount); program.scalar("FinalePulse",sourceHole?Math.sqrt(TIMELINE.flash(ticks)):0); program.integer("Steps",steps);
             program.scalar("FinaleOrbit",com.mega.overheaven.foliagecompat.finale.FinaleChoreography.motion(TIMELINE,ticks).angle());
@@ -202,21 +208,23 @@ public final class FinaleFlashGpuVerification {
             solution.bind(); glDisable(GL_SCISSOR_TEST); glClearBufferfv(GL_COLOR,0,new float[]{0,0,0,1}); glClearBufferfv(GL_COLOR,1,new float[]{0,0,0,1}); glClearBufferfv(GL_COLOR,2,new float[4]); glClearBufferfv(GL_COLOR,3,new float[]{1000000,1000000,0,-1});
             glEnable(GL_SCISSOR_TEST); glScissor((int)(bounds.left*solution.width/(float)W),(int)(bounds.bottom*solution.height/(float)H),(int)Math.ceil((bounds.right-bounds.left)*solution.width/(float)W),(int)Math.ceil((bounds.top-bounds.bottom)*solution.height/(float)H));
             integrate.use(); material(integrate,ticks,view,centerX,centerZ,sourceHole,solution.height); draw(); glDisable(GL_SCISSOR_TEST);
-            bloom.use(); material(bloom,ticks,view,centerX,centerZ,sourceHole,H); bloom.pair("FullSize",W,H); bloom.texture("FrontTexture",0,solution.textures[0]); bloom.texture("BackTexture",1,solution.textures[1]); bloom.texture("Transmission",2,surface.textures[0]); bloom.texture("LensTexture",3,solution.textures[2]); pyramid.render(bloom,1,vao);
+            bloom.use(); material(bloom,ticks,view,centerX,centerZ,sourceHole,H); bloom.pair("FullSize",W,H); bloom.texture("FrontTexture",0,solution.textures[0]); bloom.texture("BackTexture",1,solution.textures[1]); bloom.texture("Transmission",2,surface.textures[0]); bloom.texture("LensTexture",3,solution.textures[2]); pyramid.render(bloom,layerMode==1?2:layerMode==2?3:1,vao);
             if(glare!=null) {
                 var frame=TIMELINE.frame(ticks);
                 double amount=sourceHole?1:0;
-                if(frame.phase()==FinaleTimeline.Phase.EXPOSE) amount*=FinaleTimeline.smooth(0,.01875,frame.progress());
+                if(frame.phase()==FinaleTimeline.Phase.EXPOSE) amount*=(programHasIntro?com.mega.overheaven.foliagecompat.finale.CausalTransition.reveal(frame.progress()):FinaleTimeline.smooth(0,.01875,frame.progress()));
                 if(frame.phase()==FinaleTimeline.Phase.RETURN) amount*=1-FinaleTimeline.smooth(0,1,frame.progress());
-                if(glare.project(matrix,eye,centerX,0,centerZ,3.2,glareEnabled?amount:0,1,3.2,frame.phase().ordinal(),frame.progress(),W,H)) {
+                var intro=new com.mega.overheaven.foliagecompat.finale.CausalTransition.State();
+                if(sourceHole&&programHasIntro)com.mega.overheaven.foliagecompat.finale.CausalTransition.evaluate(TIMELINE,ticks,-1,intro);
+                if(glare.project(matrix,eye,centerX,0,centerZ,3.2,glareEnabled?amount:0,1,3.2,frame.phase().ordinal(),frame.progress(),W,H,intro.revealGlare)) {
                     GlProgram sourceProgram=glare.begin(); material(sourceProgram,ticks,view,centerX,centerZ,sourceHole,H);
                     sourceProgram.texture("Transmission",2,surface.textures[0]); draw();
                 }
             }
-            cosmos.bind(); composite.use(); material(composite,ticks,view,centerX,centerZ,sourceHole,H); composite.texture("Scene",0,scene.textures[0]); composite.texture("Opaque",1,scene.textures[0]); composite.texture("Transmission",2,surface.textures[0]); composite.texture("FrontTexture",3,solution.textures[0]); composite.texture("BackTexture",4,solution.textures[1]); composite.texture("LensTexture",5,solution.textures[2]); composite.texture("MetaTexture",6,solution.textures[3]); composite.texture("Bloom",7,pyramid.result().textures[0]); composite.integer("DisplaySpace",1); composite.integer("LayerMode",0); if(glare!=null) glare.bind(composite); draw();
+            cosmos.bind(); composite.use(); material(composite,ticks,view,centerX,centerZ,sourceHole,H); composite.texture("Scene",0,scene.textures[0]); composite.texture("Opaque",1,sceneOpaqueOverride==0?scene.textures[0]:sceneOpaqueOverride); composite.texture("Transmission",2,surface.textures[0]); composite.texture("FrontTexture",3,solution.textures[0]); composite.texture("BackTexture",4,solution.textures[1]); composite.texture("LensTexture",5,solution.textures[2]); composite.texture("MetaTexture",6,solution.textures[3]); composite.texture("Bloom",7,pyramid.result().textures[0]); composite.integer("DisplaySpace",displaySpace); composite.integer("LayerMode",layerMode); if(glare!=null) glare.bind(composite); draw();
         }
         void compose(double ticks,double stop) {
-            var exposure=TIMELINE.exposure(ticks,stop); result.bind(); late.use(); late.texture("Scene",0,world.textures[0]); late.texture("Cosmos",1,cosmos.textures[0]); late.scalar("Coverage",exposure.coverage()); late.scalar("Flash",exposure.white()); late.scalar("Pulse",exposure.pulse()); late.integer("Black",stop<0 && FinaleTimeline.black(TIMELINE.frame(ticks))?1:0); draw();
+            var exposure=TIMELINE.exposure(ticks,stop); result.bind(); late.use(); late.scalar("CameraExposure",programHasIntro?com.mega.overheaven.foliagecompat.finale.CausalTransition.exposure(TIMELINE,ticks,stop):0); late.texture("Scene",0,world.textures[0]); late.texture("Cosmos",1,cosmos.textures[0]); late.scalar("Coverage",exposure.coverage()); late.scalar("Flash",exposure.white()); late.scalar("Pulse",exposure.pulse()); late.integer("Black",stop<0 && FinaleTimeline.black(TIMELINE.frame(ticks))?1:0); draw();
         }
         @Override public void close() {
             for(var program:new GlProgram[]{stars,integrate,composite,bloom,late,copy}) program.close();

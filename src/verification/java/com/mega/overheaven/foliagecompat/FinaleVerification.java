@@ -139,7 +139,7 @@ public final class FinaleVerification {
             check(!java.util.Set.of("setYRot","setXRot","setPos","teleportTo").contains(call.name),"camera impulse never mutates player transform");
         }
         check(angleWrites==3,"three additive camera event angles");
-        for(String type:new String[]{"FinaleWaves","FinaleWaveFeedback"}) {
+        for(String type:new String[]{"FinaleWaves","FinaleWaveFeedback","CausalTransition","CausalTransition$Feedback"}) {
             var common=node("com/mega/overheaven/foliagecompat/finale/"+type+".class");
             for(var method:common.methods) for(var instruction:method.instructions) if(instruction instanceof MethodInsnNode call) check(!call.owner.startsWith("net/minecraft/client"),"wave clock remains client-class independent");
         }

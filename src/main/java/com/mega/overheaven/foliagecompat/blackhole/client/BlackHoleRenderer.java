@@ -26,6 +26,9 @@ public final class BlackHoleRenderer implements AutoCloseable {
     private final GlTarget scene = new GlTarget(GL_RGBA16F), solution = new GlTarget(GL_RGBA16F,GL_RGBA16F,GL_RGBA32F,GL_RGBA32F);
     private final GlBloom bloom = new GlBloom();
     private final GlSingularityGlare glare = new GlSingularityGlare();
+    private final GlCausalBackground opening=new GlCausalBackground();
+    private final java.util.function.Consumer<GlProgram> openingUniforms=this::openingUniforms;
+    private boolean openingActive,openingApplied;
     private final GlTarget foreground = new GlTarget(GL_RGBA16F);
     private final Visible[] visible = new Visible[256];
     private final boolean cosmic;
@@ -45,7 +48,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
         if (OptionalShaders.shadow()) return;
         restoreAlpha();
         if (level != Minecraft.getInstance().level) { close(); level=Minecraft.getInstance().level; }
-        captured=false; surfaceCaptured=false; count=0;
+        captured=false; surfaceCaptured=false; count=0; openingActive=false; openingApplied=false;
         if (failed || level==null || BlackHoleClient.records().isEmpty() && !FinaleClient.active() || FinaleClient.skipWorld(partial)) return;
         if(!org.lwjgl.opengl.GL.getCapabilities().OpenGL33) { fail(new IllegalStateException("Black holes require OpenGL 3.3")); return; }
         var position=camera.getPosition(); cameraX=position.x; cameraY=position.y; cameraZ=position.z;
@@ -55,8 +58,9 @@ public final class BlackHoleRenderer implements AutoCloseable {
         pixelAngle=2.0f/(height*Math.max(0.001f,Math.abs(projection.m11())));
         time=BlackHoleClient.time(partial); path=OptionalShaders.active()?"oculus/complementary-r5.9.3":"vanilla";
         this.partial=partial;
+        openingActive=CausalUniforms.sceneActive(partial);
         collectVisible();
-        timing.frame(BlackHoleClient.diagnostics,count>0,path,width,height);
+        timing.frame(BlackHoleClient.diagnostics,active(),path,width,height);
     }
     private void collectVisible() {
         BlackHole source=FinaleClient.active()?FinaleClient.state().hole():null;
@@ -108,7 +112,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
         return entry.right-entry.left>=2 && entry.top-entry.bottom>=2;
     }
     int finaleDepth() { return captured && opaque.textures[1]!=0?opaque.textures[1]:0; }
-    public boolean active() { return count>0 && !failed; }
+    public boolean active() { return (count>0 || openingActive) && !failed; }
     public void matrices(Matrix4f modelView,Matrix4f projection) {
         viewProjection.set(projection).mul(modelView); inverse.set(viewProjection).invert(); inverse.transform(opticalEye.set(0,0,1,0));
         if(Math.abs(opticalEye.w)>1.0e-8) opticalEye.div(opticalEye.w);
@@ -178,6 +182,14 @@ public final class BlackHoleRenderer implements AutoCloseable {
         try(var state=GlState.capture()) {
             timing.start(2); GlState.fullscreen();
             if(!displaySpace) { foreground.bind(); glClearBufferfv(GL_COLOR,0,CLEAR_LIGHT); }
+            if(openingActive && !openingApplied) {
+                opening.render(color,opaque.textures[0],opaque.textures[1],transparent.textures[1],transparent.textures[0],
+                        width,height,BlackHoleClient.steps,vertexArray,openingUniforms);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER,opening.result.framebuffer);glReadBuffer(GL_COLOR_ATTACHMENT0);
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER,framebuffer);
+                glBlitFramebuffer(0,0,width,height,0,0,width,height,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+                openingApplied=true;
+            }
             for(int index=0;index<count;index++) {
                 Visible entry=visible[index]; BlackHole hole=entry.hole;
                 prepareGlare(entry);
@@ -201,6 +213,11 @@ public final class BlackHoleRenderer implements AutoCloseable {
         } catch(RuntimeException exception) { fail(exception); }
         finally { timing.end(2); }
     }
+    private void openingUniforms(GlProgram program) { material(program,FinaleClient.state().hole()); }
+    public void clearOpening() {
+        try(var state=GlState.capture()) { opening.close(); }
+        openingActive=false;openingApplied=false;
+    }
     private void prepareBlur(BlackHole hole) {
         blur.use(); material(blur,hole); blur.texture("FrontTexture",0,solution.textures[0]); blur.texture("BackTexture",1,solution.textures[1]); blur.texture("Transmission",2,transparent.textures[0]); blur.texture("LensTexture",3,solution.textures[2]);
         blur.pair("FullSize",width,height);
@@ -214,7 +231,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
         var frame=FinaleClient.frame(partial);
         if(!glare.project(viewProjection,opticalEye,(float)(hole.x()-cameraX),(float)(hole.y()-cameraY),(float)(hole.z()-cameraZ),
                 hole.value("radius"),FinaleRenderer.nearAmount(hole.id(),partial),hole.value("glow"),hole.value("brightness"),
-                frame.phase().ordinal(),frame.progress(),width,height)) return;
+                frame.phase().ordinal(),frame.progress(),width,height,CausalUniforms.glare(hole.id(),partial))) return;
         entry.compositeLeft=Math.min(entry.compositeLeft,glare.left); entry.compositeBottom=Math.min(entry.compositeBottom,glare.bottom);
         entry.compositeRight=Math.max(entry.compositeRight,glare.right); entry.compositeTop=Math.max(entry.compositeTop,glare.top);
     }
@@ -223,7 +240,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
     }
     private void prepareComposite(BlackHole hole,boolean displaySpace,int mode) {
         composite.use(); material(composite,hole);
-        composite.texture("Scene",0,scene.textures[0]); composite.texture("Opaque",1,opaque.textures[0]); composite.texture("Transmission",2,transparent.textures[0]);
+        composite.texture("Scene",0,scene.textures[0]); composite.texture("Opaque",1,openingApplied?opening.result.textures[1]:opaque.textures[0]); composite.texture("Transmission",2,transparent.textures[0]);
         composite.texture("FrontTexture",3,solution.textures[0]); composite.texture("BackTexture",4,solution.textures[1]); composite.texture("LensTexture",5,solution.textures[2]); composite.texture("MetaTexture",6,solution.textures[3]); composite.texture("Bloom",7,bloom.result().textures[0]);
         composite.scalar("Glow",effectiveGlow(hole)); composite.integer("DisplaySpace",displaySpace?1:0); composite.integer("LayerMode",mode);
         glare.bind(composite);
@@ -279,7 +296,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
     public void suspend(String reason) { fail(new IllegalStateException(reason)); }
     @Override public void close() {
         if(!cosmic) OptionalShaders.reset();
-        restoreAlpha(); opaque.close(); transparent.close(); scene.close(); solution.close(); bloom.close(); glare.close(); foreground.close(); timing.close();
+        restoreAlpha(); opaque.close(); transparent.close(); scene.close(); solution.close(); bloom.close(); glare.close(); opening.close(); openingActive=false;openingApplied=false;foreground.close(); timing.close();
         if(copy!=null) copy.close(); if(integrate!=null) integrate.close(); if(composite!=null) composite.close(); if(blur!=null) blur.close();
         if(foregroundComposite!=null) foregroundComposite.close(); foregroundComposite=null;
         copy=null; integrate=null; composite=null; blur=null;

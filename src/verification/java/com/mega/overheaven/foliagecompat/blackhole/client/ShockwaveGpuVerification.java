@@ -145,8 +145,8 @@ public final class ShockwaveGpuVerification {
         try(var program=new GlProgram(read("fullscreen.vsh"),shader);var result=new GlTarget(GL_RGBA32F)){
             result.resize(1,1);program.use();program.scalar("Radius",3.2);program.scalar("Outer",11);program.scalar("Thickness",.12);
             float previous=0;
-            double chargeEnd=com.mega.overheaven.foliagecompat.finale.FinaleWaves.duration(
-                com.mega.overheaven.foliagecompat.finale.FinaleTimeline.defaults(),1)*.09/DURATION;
+            double chargeEnd=com.mega.overheaven.foliagecompat.finale.FinaleWaves.chargeDuration(
+                com.mega.overheaven.foliagecompat.finale.FinaleTimeline.defaults(),1)/DURATION;
             for(int i=0;i<=100;i++){
                 float age=i/100f;result.bind();program.use();program.scalar("Age",age);
                 var wave=new com.mega.overheaven.foliagecompat.finale.FinaleWaves.State();
@@ -229,7 +229,7 @@ public final class ShockwaveGpuVerification {
         try(var p=new FinaleFlashGpuVerification.Pipeline();var old=new FinaleFlashGpuVerification.Pipeline(before,null);var fixture=new GlProgram(read("fullscreen.vsh"),FIXTURE)){
             p.glareEnabled=false;old.glareEnabled=false;
             p.resize(48,.5f);old.resize(48,.5f);prepare(p,fixture);prepare(old,fixture);
-            expect(Files.readString(source.resolve("field.glsl")).equals(Files.readString(before.resolve("field.glsl"))),"singularity, membranes, ordinary lens and field unchanged verbatim");
+            for(String signature:new String[]{"vec3 environmentLens(","void finaleMembranes("}) expect(VerificationShaders.function(source,signature).equals(VerificationShaders.function(before,signature)),"existing lens and membranes unchanged: "+signature);
             preservation(p,old,before);rejection(p,fixture);motion();emission(p);pictures(p,old,fixture);
             if(args.length>3)preview(p,old,fixture,args[3]);
             expect(glGetError()==GL_NO_ERROR,"GL error-free");
