@@ -36,6 +36,7 @@ mixin {
     config "${mod_id}.mixins.json"
     config "${mod_id}.blackhole.mixins.json"
     config "${mod_id}.finale.mixins.json"
+    config "${mod_id}.illusiontp.mixins.json"
 }
 repositories {
     maven { url = 'https://maven.minecraftforge.net/' }
@@ -91,7 +92,7 @@ tasks.named('processResources', ProcessResources).configure {
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props }
 }
 tasks.named('jar', Jar).configure {
-    manifest { attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}.blackhole.mixins.json,${mod_id}.finale.mixins.json", 'Implementation-Version': mod_version) }
+    manifest { attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}.blackhole.mixins.json,${mod_id}.finale.mixins.json,${mod_id}.illusiontp.mixins.json", 'Implementation-Version': mod_version) }
     finalizedBy 'reobfJar'
 }
 tasks.withType(JavaCompile).configureEach {

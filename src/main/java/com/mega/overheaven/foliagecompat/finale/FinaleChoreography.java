@@ -27,13 +27,21 @@ public final class FinaleChoreography {
         new Cue(FinaleTimeline.Phase.UNWEAVE,.58,"fold",false,.6f),
         new Cue(FinaleTimeline.Phase.UNWEAVE,.84,"fold",false,.72f));
     private FinaleChoreography() { }
-    public static Motion motion(FinaleTimeline timeline,double ticks) {
+    public static Motion motion(FinaleTimeline timeline,double ticks) { return motion(timeline,ticks,false); }
+    public static Motion starMotion(FinaleTimeline timeline,double ticks) { return motion(timeline,ticks,true); }
+    private static Motion motion(FinaleTimeline timeline,double ticks,boolean sky) {
         double remaining=Math.max(0,Math.min(timeline.total(),ticks)),angle=0,speed=SPEEDS[0];
         for(var phase:FinaleTimeline.Phase.values()) {
             int index=phase.ordinal(); double duration=timeline.duration(phase),progress=Math.min(1,remaining/duration);
-            double integral=progress*progress*progress*(1-progress*.5);
-            angle+=duration/20*(SPEEDS[index]*progress+(SPEEDS[index+1]-SPEEDS[index])*integral);
-            speed=SPEEDS[index]+(SPEEDS[index+1]-SPEEDS[index])*FinaleTimeline.smooth(0,1,progress);
+            // EXTINGUISH reaches its 4x terminal speed in the first quarter of the phase.
+            // Integrate the capped speed ramp so angle, pause and phase joins remain continuous.
+            double rate=sky && phase==FinaleTimeline.Phase.EXTINGUISH?4:1;
+            double ramp=Math.min(1,progress*rate);
+            double integral=ramp*ramp*ramp*(1-ramp*.5)/rate+Math.max(0,progress-1/rate);
+            double from=sky && index==6?SPEEDS[index]*4:SPEEDS[index];
+            double to=sky && index+1==6?SPEEDS[index+1]*4:SPEEDS[index+1];
+            angle+=duration/20*(from*progress+(to-from)*integral);
+            speed=from+(to-from)*FinaleTimeline.smooth(0,1,ramp);
             if(remaining<=duration) break;
             remaining-=duration;
         }

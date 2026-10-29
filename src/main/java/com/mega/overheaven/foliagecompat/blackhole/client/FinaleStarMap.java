@@ -73,7 +73,7 @@ final class FinaleStarMap implements AutoCloseable {
             return true;
         } catch(RuntimeException error) {
             release();loading=null;failed=true;
-            PatchLog.LOGGER.error("NASA finale sky unavailable; using procedural fallback until resource reload",error);
+            PatchLog.LOGGER.error("NASA finale sky unavailable; using procedural short-trail fallback until resource reload",error);
             return false;
         }
     }
@@ -89,7 +89,9 @@ final class FinaleStarMap implements AutoCloseable {
         try(var state=GlState.capture()) {
             GlState.fullscreen();points.use();uniforms.accept(points);points.pair("FullSize",width,height);
             glEnable(GL_BLEND);glBlendEquation(GL_FUNC_ADD);glBlendFuncSeparate(GL_ONE,GL_ONE,GL_ZERO,GL_ONE);
-            glBindVertexArray(vao);glDrawArraysInstanced(GL_TRIANGLES,0,6,Math.min(count,detail==0?1024:detail==2?4096:2048));
+            int visible=Math.min(count,detail==0?1024:detail==2?4096:2048),segments=detail==0?4:detail==2?12:8;
+            points.integer("TrailSegments",segments);points.integer("BrightStars",visible/4);
+            glBindVertexArray(vao);glDrawArraysInstanced(GL_TRIANGLES,0,6*(segments+1),visible);
         }
     }
     void warm() {
@@ -98,7 +100,7 @@ final class FinaleStarMap implements AutoCloseable {
     }
     boolean loaded() { return texture!=0; }
     boolean loading() { return loading!=null && !loading.isDone(); }
-    String path() { return texture!=0?"nasa-2020-full-sphere":failed?"procedural-fallback":"nasa-loading"; }
+    String path() { return texture!=0?"nasa-2020-full-sphere":failed?"procedural-short-trails":"nasa-loading"; }
     private void release() {
         if(background!=null) background.close();if(points!=null) points.close();if(fallback!=null) fallback.close();background=points=fallback=null;
         if(texture!=0) glDeleteTextures(texture);if(buffer!=0) glDeleteBuffers(buffer);if(vao!=0) glDeleteVertexArrays(vao);texture=buffer=vao=count=0;

@@ -18,6 +18,7 @@ public abstract class LevelRendererMixin {
     private void overheaven$begin(PoseStack pose,float partial,long deadline,boolean outline,Camera camera,GameRenderer renderer,LightTexture light,Matrix4f projection,CallbackInfo callback) {
         com.mega.overheaven.foliagecompat.blackhole.client.FinaleRenderer.INSTANCE.camera(pose.last().pose(),projection,camera);
         BlackHoleRenderer.INSTANCE.begin(pose.last().pose(),projection,camera,partial);
+        com.mega.overheaven.foliagecompat.blackhole.client.IllusionTpRenderer.INSTANCE.camera(pose.last().pose(),projection);
     }
     @Inject(method="renderLevel",at=@At(value="CONSTANT",args="stringValue=translucent"),require=2,allow=2)
     private void overheaven$opaque(CallbackInfo callback) { BlackHoleRenderer.INSTANCE.beforeTranslucent(); }

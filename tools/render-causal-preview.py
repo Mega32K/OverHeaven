@@ -18,7 +18,7 @@ def stem(layer,p):
 def pitch(layer,p):
     return 1+.025*math.sin(p*19)*(1-smooth(.6,1,p)) if layer==0 else 1+.25*smooth(.175,.53,p)*(1-smooth(.57,.825,p))
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--audit',default='audit/intro-reveal-2026-10-28/gpu');options=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--audit',default='audit/portal-impact-reference-2026-10-29/gpu');options=parser.parse_args()
     out=ROOT/options.audit;encoder=imageio_ffmpeg.get_ffmpeg_exe();names=['hum','pressure','grain','tail','causal_charge','causal_fault','causal_release','causal_recoil'];decoded={}
     for name in names:
         result=subprocess.run([encoder,'-v','error','-i',str(SOUNDS/(name+'.ogg')),'-f','f32le','-ac','2','-ar',str(RATE),'pipe:1'],check=True,stdout=subprocess.PIPE)

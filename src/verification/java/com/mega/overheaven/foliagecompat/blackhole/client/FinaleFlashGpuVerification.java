@@ -62,17 +62,20 @@ public final class FinaleFlashGpuVerification {
             pipeline.compose(822,1); expect(pixels(pipeline.result)[0]==.25f,"stop endpoint exactly restores world");
             pipeline.compose(2360,-1); expect(Math.abs(pixels(pipeline.result)[0]-.5f)<.001,"return midpoint is weighted images, not additive subjects");
             pipeline.compose(2288,-1); expect(solid(pixels(pipeline.result),0),"late exact black overrides all layers");
-            pipeline.cosmos(824,new Matrix4f().rotateY((float)Math.PI),0,-24,false);
+            // Final wave still refracts the background at tick 824, even behind the camera.
+            // Test fake offscreen subjects after that wave has finished.
+            pipeline.cosmos(900,new Matrix4f().rotateY((float)Math.PI),0,-24,false);
             expect(difference(pixels(pipeline.cosmos),pixels(pipeline.background))<.1,"backward view has no clamped or fake singularity");
             pipeline.compose(818,-1); expect(solid(pixels(pipeline.result),1),"backward view still flashes full white");
-            pipeline.cosmos(824,new Matrix4f().rotateX(-1.55f),0,-24,false);
+            pipeline.cosmos(900,new Matrix4f().rotateX(-1.55f),0,-24,false);
             expect(difference(pixels(pipeline.cosmos),pixels(pipeline.background))<.1,"upward view has no edge-clamped singularity");
             image(pipeline.cosmos,"upward-background");
             pipeline.cosmos(824,new Matrix4f(),0,-1,false);
             expect(difference(pixels(pipeline.cosmos),pixels(pipeline.background))>1,"camera inside subject bounds still renders membranes"); image(pipeline.cosmos,"inside-subject");
             pipeline.cosmos(824,view,0,-24,false); float[] stable=pixels(pipeline.cosmos);
             pipeline.cosmos(824,view,0,-24,false); expect(Arrays.equals(stable,pixels(pipeline.cosmos)),"frozen timeline produces identical pixels");
-            pipeline.depth(.9f); pipeline.subject(824,view,0,-24,true); expect(energy(pixels(pipeline.solution))==0,"before takeover wall blocks singularity radiation");
+            // Isolate source occlusion: the earlier wave can legitimately be in front of this wall.
+            pipeline.depth(.9f); pipeline.subject(900,view,0,-24,true); expect(energy(pixels(pipeline.solution))==0,"opaque world-depth input blocks source-only singularity radiation");
             pipeline.cosmos(824,view,0,-24,false); expect(difference(stable,pixels(pipeline.cosmos))<.1,"cosmic input resets hidden terrain depth");
             pipeline.cosmos.bind(); glClearBufferfv(GL_COLOR,0,new float[]{.25f,.25f,.25f,1}); pipeline.depth(1); pipeline.subject(824,view,0,-24,false);
             float[] ordinary=pixels(pipeline.cosmos); int center=((H/2)*W+W/2)*4;
@@ -99,7 +102,8 @@ public final class FinaleFlashGpuVerification {
                 REPORT.append(String.format(Locale.ROOT,"fixture phase=%s ticks=%.1f stars+subject+bloom+late %.3f ms/frame%n",TIMELINE.frame(ticks).phase(),ticks,millis));
             }
             Path before=output.getParent().resolve("before/src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole");
-            try(var original=new Pipeline(before,null)) {
+            if(!Files.exists(before.resolve("fullscreen.vsh"))) REPORT.append("Full-composition baseline timing not run: partial snapshot; paired star-only timing is recorded separately.\n");
+            else try(var original=new Pipeline(before,null)) {
                 original.resize(48,.5f); original.world.bind(); glClearBufferfv(GL_COLOR,0,new float[]{.08f,.11f,.17f,1});
                 double[] costs=new double[2];
                 for(int variant=0;variant<2;variant++) {
@@ -131,7 +135,7 @@ public final class FinaleFlashGpuVerification {
         final BlackHoleScreenBounds bounds=new BlackHoleScreenBounds();
         int steps=48;
         int sceneOpaqueOverride,layerMode,displaySpace=1;
-        boolean glareEnabled=true;
+        boolean glareEnabled=true,impactEnabled=true;
         boolean spectrumEnabled=true;
         final boolean programHasWaves;
         final boolean programHasIntro;
@@ -224,7 +228,10 @@ public final class FinaleFlashGpuVerification {
             cosmos.bind(); composite.use(); material(composite,ticks,view,centerX,centerZ,sourceHole,H); composite.texture("Scene",0,scene.textures[0]); composite.texture("Opaque",1,sceneOpaqueOverride==0?scene.textures[0]:sceneOpaqueOverride); composite.texture("Transmission",2,surface.textures[0]); composite.texture("FrontTexture",3,solution.textures[0]); composite.texture("BackTexture",4,solution.textures[1]); composite.texture("LensTexture",5,solution.textures[2]); composite.texture("MetaTexture",6,solution.textures[3]); composite.texture("Bloom",7,pyramid.result().textures[0]); composite.integer("DisplaySpace",displaySpace); composite.integer("LayerMode",layerMode); if(glare!=null) glare.bind(composite); draw();
         }
         void compose(double ticks,double stop) {
-            var exposure=TIMELINE.exposure(ticks,stop); result.bind(); late.use(); late.scalar("CameraExposure",programHasIntro?com.mega.overheaven.foliagecompat.finale.CausalTransition.exposure(TIMELINE,ticks,stop):0); late.texture("Scene",0,world.textures[0]); late.texture("Cosmos",1,cosmos.textures[0]); late.scalar("Coverage",exposure.coverage()); late.scalar("Flash",exposure.white()); late.scalar("Pulse",exposure.pulse()); late.integer("Black",stop<0 && FinaleTimeline.black(TIMELINE.frame(ticks))?1:0); draw();
+            var exposure=TIMELINE.exposure(ticks,stop); result.bind(); late.use();
+            var introImpact=new com.mega.overheaven.foliagecompat.finale.CausalTransition.State();
+            if(programHasIntro && impactEnabled)com.mega.overheaven.foliagecompat.finale.CausalTransition.evaluate(TIMELINE,ticks,stop,introImpact);
+            CausalUniforms.applyImpact(late,introImpact); late.scalar("CameraExposure",programHasIntro?com.mega.overheaven.foliagecompat.finale.CausalTransition.exposure(TIMELINE,ticks,stop):0); late.texture("Scene",0,world.textures[0]); late.texture("Cosmos",1,cosmos.textures[0]); late.scalar("Coverage",exposure.coverage()); late.scalar("Flash",exposure.white()); late.scalar("Pulse",exposure.pulse()); late.integer("Black",stop<0 && FinaleTimeline.black(TIMELINE.frame(ticks))?1:0); draw();
         }
         @Override public void close() {
             for(var program:new GlProgram[]{stars,integrate,composite,bloom,late,copy}) program.close();

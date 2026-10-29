@@ -78,6 +78,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
         entry.distance=relativeX*relativeX+relativeY*relativeY+relativeZ*relativeZ;
         double extent=hole.value("outer")*1.35+hole.value("thickness")*2.0;
         if(FinaleClient.source(hole.id())) {
+            extent*=Math.max(1,CausalUniforms.bodyScale(hole.id(),partial));
             com.mega.overheaven.foliagecompat.finale.FinaleWaves.evaluate(FinaleClient.state().timeline(),FinaleClient.ticks(partial),hole.value("radius"),hole.value("outer"),hole.value("thickness"),waveBounds);
             extent=Math.max(extent,Math.max(Math.max(32.0,hole.value("radius")*1.5),waveBounds.support));
         }
@@ -183,8 +184,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
             timing.start(2); GlState.fullscreen();
             if(!displaySpace) { foreground.bind(); glClearBufferfv(GL_COLOR,0,CLEAR_LIGHT); }
             if(openingActive && !openingApplied) {
-                opening.render(color,opaque.textures[0],opaque.textures[1],transparent.textures[1],transparent.textures[0],
-                        width,height,BlackHoleClient.steps,vertexArray,openingUniforms);
+                opening.render(color,opaque.textures[0],width,height,vertexArray,openingUniforms);
                 glBindFramebuffer(GL_READ_FRAMEBUFFER,opening.result.framebuffer);glReadBuffer(GL_COLOR_ATTACHMENT0);
                 glBindFramebuffer(GL_DRAW_FRAMEBUFFER,framebuffer);
                 glBlitFramebuffer(0,0,width,height,0,0,width,height,GL_COLOR_BUFFER_BIT,GL_NEAREST);

@@ -5,15 +5,24 @@ uniform sampler2D Scene,Cosmos;
 uniform float Coverage,Flash,Pulse,CameraExposure,CameraChroma;
 uniform vec2 FullSize;
 uniform int Black;
+uniform float IntroImpact,IntroImpactPolarity;
 vec3 sceneAt(vec2 uv) {
     if(Coverage<=0.) return texture(Scene,uv).rgb;
     if(Coverage>=1.) return texture(Cosmos,uv).rgb;
     return mix(texture(Scene,uv).rgb,texture(Cosmos,uv).rgb,Coverage);
 }
+vec3 impactFrame(vec3 source) {
+    // Adapt the supplied game_1_portal Grey -> light(2.5) -> ut(5) color response.
+    // Its channel-weighted square retains filled light/shadow masses, not just edges.
+    vec3 color=clamp(source,0.,1.);
+    float grey=dot(color*color,vec3(.114,.567,.299));
+    float ink=clamp((grey*2.5-.5)*5.+.5,0.,1.);
+    return vec3(mix(ink,1.-ink,IntroImpactPolarity));
+}
 void main() {
     if(Black!=0) { Color=vec4(0,0,0,1); return; }
     if(Flash>=1.) { Color=vec4(1); return; }
-    vec3 light=max(sceneAt(texCoord),vec3(0));
+    vec3 source=max(sceneAt(texCoord),vec3(0)),light=source;
     if(CameraChroma>0. && min(FullSize.x,FullSize.y)>0.) {
         vec2 p=(texCoord-.5)*FullSize;
         float r=length(p)/max(1.,length(FullSize*.5));
@@ -29,5 +38,6 @@ void main() {
     // raises highlights without treating this display-space scene as raw HDR.
     if(CameraExposure>0.) light=mix(vec3(1.)-pow(max(vec3(0),vec3(1.)-light),vec3(exp2(CameraExposure))),light*exp2(CameraExposure),step(vec3(1.),light));
     light+=(vec3(1)-exp(-light*2.))*Pulse*.06;
+    if(IntroImpact>0.) light=mix(light,impactFrame(source),clamp(IntroImpact,0.,1.));
     Color=vec4(mix(light,vec3(1),clamp(Flash,0.,1.)),1);
 }

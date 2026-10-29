@@ -14,6 +14,8 @@ public final class FoliageCompat {
         com.mega.overheaven.foliagecompat.blackhole.BlackHoleNetwork.init();
         com.mega.overheaven.foliagecompat.finale.FinaleNetwork.init();
         com.mega.overheaven.foliagecompat.pixeltp.PixelTpNetwork.init();
+        com.mega.overheaven.foliagecompat.illusiontp.IllusionTpNetwork.init();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.mega.overheaven.foliagecompat.illusiontp.IllusionTpManager());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.mega.overheaven.foliagecompat.pixeltp.PixelTpManager());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.mega.overheaven.foliagecompat.finale.FinaleEvents());
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.mega.overheaven.foliagecompat.blackhole.BlackHoleEvents());

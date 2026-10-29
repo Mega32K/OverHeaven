@@ -21,6 +21,7 @@ public final class FinaleRenderer implements AutoCloseable {
     private GlProgram compose;
     private static final com.mega.overheaven.foliagecompat.finale.FinaleWaves.State WAVE=new com.mega.overheaven.foliagecompat.finale.FinaleWaves.State();
     private static final float[] BLACK={0,0,0,1};
+    private final com.mega.overheaven.foliagecompat.finale.FinaleStarExposure exposure=new com.mega.overheaven.foliagecompat.finale.FinaleStarExposure();
     private int vao;
     private double cameraX,cameraY,cameraZ;
     private float projectionScale;
@@ -59,7 +60,7 @@ public final class FinaleRenderer implements AutoCloseable {
         program.scalar("FinaleOrbit",FinaleChoreography.motion(FinaleClient.state().timeline(),FinaleClient.ticks(partial)).angle());
     }
     public void render(float partial) {
-        if(!FinaleClient.active() || !cameraValid || FinaleClient.coverage(partial)<=0 && FinaleClient.flash(partial)<=0 && FinaleClient.feedback().exposure<=0 && FinaleClient.feedback().chroma<=0 && CausalUniforms.exposure(partial)<=0) return;
+        if(!FinaleClient.active() || !cameraValid || FinaleClient.coverage(partial)<=0 && FinaleClient.flash(partial)<=0 && FinaleClient.feedback().exposure<=0 && FinaleClient.feedback().chroma<=0 && CausalUniforms.exposure(partial)<=0 && CausalUniforms.impact(partial)<=0) return;
         var mc=Minecraft.getInstance(); var target=mc.getMainRenderTarget();
         try(var state=GlState.capture()) {
             if(compose==null) { compose=new GlProgram("finale_composite"); vao=glGenVertexArrays(); }
@@ -69,6 +70,7 @@ public final class FinaleRenderer implements AutoCloseable {
             glBlitFramebuffer(0,0,width,height,0,0,width,height,GL_COLOR_BUFFER_BIT,GL_NEAREST);
             glBindVertexArray(vao);
             if(FinaleClient.coverage(partial)>0) {
+                exposure.evaluate(FinaleClient.state().timeline(),FinaleClient.ticks(partial),BlackHoleClient.steps==24?0:BlackHoleClient.steps==96?2:1);
                 stars.resize(Math.max(1,(int)(width*BlackHoleClient.resolution)),Math.max(1,(int)(height*BlackHoleClient.resolution)));
                 cosmicScene.resize(width,height); stars.bind();
                 boolean nasa=sky.drawBackground(p->uniforms(p,partial),vao);
@@ -83,6 +85,7 @@ public final class FinaleRenderer implements AutoCloseable {
             timing.start(1); glBindFramebuffer(GL_FRAMEBUFFER,target.frameBufferId); glViewport(0,0,width,height); compose.use(); uniforms(compose,partial);
             compose.texture("Scene",0,scene.textures[0]); compose.texture("Cosmos",1,FinaleClient.coverage(partial)>0?cosmicScene.textures[0]:scene.textures[0]);
             compose.pair("FullSize",width,height); compose.scalar("CameraExposure",Math.max(FinaleClient.feedback().exposure,CausalUniforms.exposure(partial))); compose.scalar("CameraChroma",FinaleClient.feedback().chroma);
+            CausalUniforms.impactUniforms(compose,partial);
             compose.scalar("Flash",FinaleClient.flash(partial)); compose.scalar("Pulse",FinaleClient.pulse(partial));
             glBindVertexArray(vao); glDrawArrays(GL_TRIANGLES,0,3); timing.end(1);
         } catch(RuntimeException error) { FinaleClient.fail(error); }
@@ -90,6 +93,7 @@ public final class FinaleRenderer implements AutoCloseable {
     }
     private void uniforms(GlProgram p,float partial) {
         var state=FinaleClient.state(); var frame=FinaleClient.frame(partial);
+        StarExposureUniforms.apply(p,exposure);
         p.matrix("InverseVP",inverse); p.matrix("VP",vp); p.vector("Eye",eye.x,eye.y,eye.z);
         p.vector("Center",(float)(state.hole().x()-cameraX),(float)(state.hole().y()-cameraY),(float)(state.hole().z()-cameraZ));
         var hole=state.hole(); double tilt=Math.toRadians(hole.value("tilt")),yaw=Math.toRadians(hole.value("yaw"));
@@ -98,7 +102,7 @@ public final class FinaleRenderer implements AutoCloseable {
         p.vector("DiskRight",(float)Math.cos(yaw),0,(float)-Math.sin(yaw));
         p.vector("DiskForward",(float)(-Math.sin(yaw)*Math.cos(tilt)),(float)Math.sin(tilt),(float)(-Math.cos(yaw)*Math.cos(tilt)));
         p.scalar("Time",FinaleClient.ticks(partial)/20); p.scalar("Seed",(state.hole().seed()&65535)/257.0);
-        var motion=FinaleChoreography.motion(state.timeline(),FinaleClient.ticks(partial));
+        var motion=FinaleChoreography.starMotion(state.timeline(),FinaleClient.ticks(partial));
         p.scalar("OrbitAngle",motion.angle()); p.scalar("OrbitSpeed",motion.speed()); p.integer("StarsOnly",0);
         p.integer("Phase",frame.phase().ordinal()); p.scalar("Progress",frame.progress()); p.scalar("Coverage",FinaleClient.coverage(partial));
         p.scalar("Extinction",frame.phase().ordinal()>5?1:frame.phase().ordinal()==5?frame.progress():0);
@@ -106,6 +110,6 @@ public final class FinaleRenderer implements AutoCloseable {
     }
     @Override public void close() {
         try(var state=GlState.capture()) { subjects.close(); cosmicScene.close(); scene.close(); stars.close(); geometry.close(); sky.close(); if(compose!=null) compose.close(); compose=null; if(vao!=0) glDeleteVertexArrays(vao); vao=0; timing.close(); }
-        cameraValid=false;
+        cameraValid=false;exposure.clear();
     }
 }

@@ -16,8 +16,8 @@ public final class FinaleFeedbackVerification {
                 double flight=FinaleWaves.flightDuration(timeline,id,radius,outer,.16),base=FinaleWaves.baseVelocity(timeline,id,radius,outer,.16);
                 double d=FinaleWaves.duration(timeline,id),e=FinaleWaves.extent(radius,outer,.16);
                 double oldFlight=d*.91+e*.86/FinaleWaves.endVelocity(radius,e,d);
-                check(near(charge,d*.09/1.25),"charge shortened by 1.25");
-                check(near(base,1.25*(e*1.72-radius*.28)/oldFlight),"base calibrated from old ordinary mean velocity");
+                check(near(charge,d*.09/(1.25*3)),"charge three times faster than previous revision");
+                check(near(base,3*1.25*(e*1.72-radius*.28)/oldFlight),"all seven waves three times previous velocity");
                 check(flight<oldFlight*(id==6?2.1:1),"outward lifetime shortened");
                 double previous=-1,integral=0;
                 for(int i=0;i<=1000;i++) {
@@ -43,7 +43,7 @@ public final class FinaleFeedbackVerification {
         }
         check(near(FinaleWaves.baseVelocity(timeline,3,3.2,11,.16),FinaleWaves.baseVelocity(timeline,6,3.2,11,.16)),"final double range shares equivalent ordinary base speed");
         double start=FinaleWaves.start(timeline,6),finish=FinaleWaves.end(timeline,6,3.2,11,.16);
-        check(start==808,"impact start unchanged");check(finish>timeline.start(FinaleTimeline.Phase.REVERSE),"final wave crosses into reverse");
+        check(start==808,"impact start unchanged");check(finish<timeline.start(FinaleTimeline.Phase.REVERSE),"faster final wave expires on its own lifetime before reverse");
         for(int id:new int[]{0,6}) {
             var feedback=new FinaleWaveFeedback();double s=FinaleWaves.start(timeline,id),end=FinaleWaves.end(timeline,id,3.2,11,.16);
             double maxExposure=0,maxPitch=0;boolean hit=false;double hitTime=0;
@@ -74,7 +74,7 @@ public final class FinaleFeedbackVerification {
         feedback.update(timeline,start+40,3.2,11,.16,0,0,8,8,false,true);
         check(!feedback.crossed(6),"clock discontinuity does not replay crossing");
         for(double gap:new double[]{12,9,6,3,.01}) {
-            feedback.reset();double t=start+30;FinaleWaves.sample(timeline,6,t,3.2,11,.16,state);
+            feedback.reset();double t=start+FinaleWaves.chargeDuration(timeline,6)+FinaleWaves.flightDuration(timeline,6,3.2,11,.16)*.5;FinaleWaves.sample(timeline,6,t,3.2,11,.16,state);
             double distance=state.radius+gap;
             feedback.update(timeline,t,3.2,11,.16,0,0,distance,distance,false,false);
             check(Math.abs(feedback.chroma-(1-FinaleTimeline.smooth(0,12,gap)))<1.e-9,"12-block approach curve");

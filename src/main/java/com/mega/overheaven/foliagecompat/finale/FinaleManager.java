@@ -77,7 +77,6 @@ public final class FinaleManager {
                 if(run.preparing) { prepare(run); continue; }
                 var old=run.timeline.frame(run.clock.elapsed()).phase(); run.clock.tick();
                 var frame=run.timeline.frame(run.clock.elapsed());
-                if(frame.phase()==FinaleTimeline.Phase.FRACTURE && frame.progress()>=0.8 || frame.phase()==FinaleTimeline.Phase.REVERSE) removeGlass(run);
                 if(frame.phase()==FinaleTimeline.Phase.RETURN && old!=frame.phase()) queueRecovery(run);
                 if(run.clock.elapsed()>=run.timeline.total()) { finish(run); continue; }
                 if(frame.phase()!=old || run.clock.elapsed()%40==0) broadcast(run,false);
@@ -94,11 +93,9 @@ public final class FinaleManager {
             BlockPos pos=run.scan.next().immutable(); if(pos.distSqr(run.origin)>24*24 || level.isOutsideBuildHeight(pos) || !level.hasChunkAt(pos)) continue;
             var state=level.getBlockState(pos);
             if(state.is(Tags.Blocks.GLASS) || state.is(Tags.Blocks.GLASS_PANES) || state.is(Blocks.TINTED_GLASS)) {
-                if(!state.getFluidState().isEmpty()) { run.water++; continue; }
-                if(state.hasBlockEntity()) { run.blockEntities++; continue; }
-                if(run.glass.size()<1024) {
-                    run.glass.add(pos); journal.entries.put(new FinaleJournal.Key(run.hole.dimension(),pos.asLong()),new FinaleJournal.Entry(run.id.toString(),state));
-                }
+                // Glass destruction is retired. Keep existing recovery journals readable,
+                // but never reserve/remove new glass or turn it into building debris.
+                continue;
             } else if(run.debris.size()<24 && state.isSolidRender(level,pos) && !state.hasBlockEntity() && pos.asLong()%11==0) {
                 for(Direction face:Direction.values()) if(level.hasChunkAt(pos.relative(face)) && level.getBlockState(pos.relative(face)).isAir()) { run.debris.add(pos); break; }
             }
@@ -107,14 +104,6 @@ public final class FinaleManager {
         if(!run.scan.hasNext()) {
             journal.flush(); run.preparing=false; broadcast(run,true);
             PatchLog.LOGGER.info("Finale prepared {}: {} glass, {} debris, excluded water={}, block entities={}",run.hole.id(),run.glass.size(),run.debris.size(),run.water,run.blockEntities);
-        }
-    }
-    private void removeGlass(Run run) {
-        ServerLevel level=level(run.hole.dimension()); if(level==null) return;
-        for(int batch=0;batch<64 && run.removed<run.glass.size();batch++) {
-            BlockPos pos=run.glass.get(run.removed++); if(!level.hasChunkAt(pos)) continue;
-            var saved=journal.entries.get(new FinaleJournal.Key(run.hole.dimension(),pos.asLong()));
-            if(saved!=null && level.getBlockState(pos).equals(saved.original())) write(level,pos,Blocks.AIR.defaultBlockState());
         }
     }
     private void queueRecovery(Run run) {

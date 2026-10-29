@@ -63,7 +63,7 @@ void main() {
     bool transparent=surface<opaque-max(0.002,opaque*0.00001);
     if(!transparent) surface=opaque;
     vec3 distantGlare=singularityGlare(texCoord,opaque,surface,transparent);
-    vec2 bounds = sphere(Eye-Center,direction,max(Outer*1.35+Thickness*2.0,FinaleAmount>0.0?max(max(32.0,Radius*1.5),WaveSupport):0.0));
+    vec2 bounds = sphere(Eye-Center,direction,max(bodyExtent(),FinaleAmount>0.0?max(max(32.0,Radius*1.5),WaveSupport):0.0));
     if (bounds.y <= 0.0 || max(0.0,bounds.x) >= opaque) {
         vec3 halo=bloomAt(texCoord,opaque)+distantGlare;
         if(DisplaySpace==1) halo=halo/(vec3(1.0)+halo);

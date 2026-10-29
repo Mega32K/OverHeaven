@@ -25,7 +25,10 @@ uniform float FinalePulse;
 uniform int FinalePhase;
 uniform int IntroEnabled;
 uniform float IntroCharge,IntroTighten,IntroCapture,IntroDisk,IntroBurst,IntroFlow;
-float coreRadius() { return Radius*(IntroEnabled!=0?IntroCapture:1.0-clamp(FinaleAmount,0.0,1.0)); }
+uniform float IntroBodyScale;
+float bodyScale() { return IntroEnabled!=0?IntroBodyScale:1.; }
+float bodyExtent() { return (Outer*1.35+Thickness*2.)*max(1.,bodyScale()); }
+float coreRadius() { return Radius*(IntroEnabled!=0?IntroCapture*bodyScale():1.0-clamp(FinaleAmount,0.0,1.0)); }
 uniform int Steps;
 uniform float PixelAngle;
 uniform sampler2D DiskTexture;
@@ -113,12 +116,14 @@ vec3 environmentLens(vec2 uv,vec3 direction,float opaque,vec2 bounds) {
 }
 struct Field { vec4 front; vec4 back; vec4 lens; vec4 meta; };
 Field ordinaryField(vec2 uv) {
+    float scale=bodyScale();
+    float bodyRadius=Radius*scale,diskInner=Inner*scale,diskOuter=Outer*scale,diskThickness=Thickness*scale;
     vec3 direction = rayAt(uv), origin = Eye - Center;
     float opaque = distanceAt(uv, texture(OpaqueDepth, uv).r);
     float surface = distanceAt(uv, texture(SurfaceDepth, uv).r);
     bool transparent = surface < opaque - max(0.002, opaque * 0.00001);
     if (!transparent) surface = opaque;
-    vec2 bounds = sphere(origin, direction, Outer * 1.35 + Thickness * 2.0);
+    vec2 bounds = sphere(origin, direction, bodyExtent());
     vec2 core = sphere(origin, direction, max(coreRadius(),0.000001));
     float coreHit = core.y > 0.0 ? max(0.0, core.x) : 1000000.0;
     Field result;
@@ -128,7 +133,7 @@ Field ordinaryField(vec2 uv) {
     result.meta = vec4(opaque, surface, coreHit < opaque ? 1.0 : 0.0, -1.0);
     if (bounds.y <= 0.0 || max(bounds.x, 0.0) >= opaque) return result;
     if(coreHit>=opaque) {
-        vec3 mapping=environmentLens(uv,direction,opaque,bounds);
+        vec3 mapping=environmentLens(uv,direction,opaque,sphere(origin,direction,Outer*1.35+Thickness*2.));
         result.lens.xy=mapping.xy; result.meta.w=mapping.z;
     }
     float travel = max(bounds.x, 0.0);
@@ -141,16 +146,16 @@ Field ordinaryField(vec2 uv) {
         float radial = length(position);
         float stepSize = budget;
         stepSize = min(stepSize, finish - travel);
-        vec3 acceleration = -position * (0.4 * Radius * Lensing / pow(max(radial, Radius * 0.8), 3.0));
+        vec3 acceleration = -position * (0.4 * bodyRadius * Lensing / pow(max(radial, bodyRadius * 0.8), 3.0));
         acceleration -= velocity * dot(acceleration, velocity);
         vec3 nextVelocity = normalize(velocity + acceleration * stepSize);
         vec3 nextPosition = position + normalize(velocity + nextVelocity) * stepSize;
         float height0 = dot(position, DiskNormal), height1 = dot(nextPosition, DiskNormal);
         float delta = height1 - height0;
         float begin = 0.0, end = 1.0;
-        if (abs(delta) < 0.00001) { if (abs(height0) > Thickness * 2.0) end = 0.0; }
+        if (abs(delta) < 0.00001) { if (abs(height0) > diskThickness * 2.0) end = 0.0; }
         else {
-            vec2 slab = vec2(-Thickness * 2.0 - height0, Thickness * 2.0 - height0) / delta;
+            vec2 slab = vec2(-diskThickness * 2.0 - height0, diskThickness * 2.0 - height0) / delta;
             begin = max(0.0, min(slab.x, slab.y)); end = min(1.0, max(slab.x, slab.y));
         }
         if (end > begin) {
@@ -161,16 +166,16 @@ Field ordinaryField(vec2 uv) {
                 vec3 gas = mix(position, nextPosition, midpoint);
                 vec2 disk = vec2(dot(gas, DiskRight), dot(gas, DiskForward));
                 float radius = length(disk);
-                if (radius <= Inner || radius >= Outer) continue;
-                float radialMask = smoothstep(Inner, Inner + (Outer-Inner)*0.04, radius) * (1.0-smoothstep(Outer*0.74, Outer, radius));
+                if (radius <= diskInner || radius >= diskOuter) continue;
+                float radialMask = smoothstep(diskInner, diskInner + (diskOuter-diskInner)*0.04, radius) * (1.0-smoothstep(diskOuter*0.74, diskOuter, radius));
                 float grazing = sqrt(max(0.0,1.0-pow(dot(velocity,DiskNormal),2.0)));
                 float footprint = max(max(travel,1.0)*PixelAngle, subLength*grazing*0.35);
-                vec3 material = diskMaterial(disk,footprint);
-                float height = dot(gas,DiskNormal)/max(Thickness,0.001);
+                vec3 material = diskMaterial(disk/scale,footprint/scale);
+                float height = dot(gas,DiskNormal)/max(diskThickness,0.001);
                 float vertical = exp(-height*height*(0.55+material.z*0.35)*(1.+(IntroEnabled!=0?IntroTighten*1.5:0.)));
-                float optical = radialMask * material.x * vertical * subLength / max(Thickness,0.02);
+                float optical = radialMask * material.x * vertical * subLength / max(diskThickness,0.02);
                 float absorption = 1.0-exp(-optical*1.4);
-                float heat = pow(clamp((Outer-radius)/(Outer-Inner),0.0,1.0),1.35);
+                float heat = pow(clamp((diskOuter-radius)/(diskOuter-diskInner),0.0,1.0),1.35);
                 vec3 emission = mix(ColdColor,HotColor,smoothstep(0.10,0.74,heat)) * Brightness * (0.16+heat*3.3);
                 emission *= material.y * 0.5;
                 if(IntroEnabled!=0) {
@@ -197,15 +202,15 @@ Field ordinaryField(vec2 uv) {
                 vec3 hazePosition=mix(position,nextPosition,hazeFraction);
                 float hazeHeight=dot(hazePosition,DiskNormal);
                 float hazeRadius=length(hazePosition-DiskNormal*hazeHeight);
-                float hazeWidth=max(Radius*0.35,Thickness*3.0);
-                vec2 hazeOffset=vec2(hazeRadius-Inner,hazeHeight*1.6)/hazeWidth;
+                float hazeWidth=max(bodyRadius*0.35,diskThickness*3.0);
+                vec2 hazeOffset=vec2(hazeRadius-diskInner,hazeHeight*1.6)/hazeWidth;
                 float hazeSquared=dot(hazeOffset,hazeOffset);
                 if(hazeSquared>=6.25) continue;
                 float hazeDensity=exp(-hazeSquared*1.8)*(1.0-smoothstep(2.25,6.25,hazeSquared));
                 float hazeLength=stepSize*0.5;
                 float hazeStart=travel+float(hazeTap)*hazeLength;
                 float hazeFront=clamp((surface-hazeStart)/max(hazeLength,0.00001),0.0,1.0);
-                vec3 hazeLight=innerTransitionColor(HotColor,hazeRadius)*Brightness*Glow*0.11*hazeDensity*hazeLength/hazeWidth;
+                vec3 hazeLight=innerTransitionColor(HotColor,hazeRadius/scale)*Brightness*Glow*0.11*hazeDensity*hazeLength/hazeWidth;
                 result.front.rgb+=result.front.a*hazeLight*hazeFront;
                 result.back.rgb+=result.back.a*hazeLight*(1.0-hazeFront);
                 if(hazeDensity>0.0001 && hazeFront>0.0) result.lens.z=min(result.lens.z,hazeStart);

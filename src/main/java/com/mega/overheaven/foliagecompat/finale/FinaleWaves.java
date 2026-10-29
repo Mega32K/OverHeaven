@@ -3,7 +3,7 @@ package com.mega.overheaven.foliagecompat.finale;
 /** One authoritative, allocation-free propagation model for the renderer and local camera. */
 public final class FinaleWaves {
     public static final int COUNT=7;
-    private static final double SPEED=1.5, RANGE=2, BOOST=1.25, EXTRA=.75;
+    private static final double SPEED=1.5, RANGE=2, BOOST=1.25, IMPACT_SPEED=3, EXTRA=.75;
     private static final double EXPONENT=10*Math.log(2), EXPO_DENOMINATOR=1023;
     private static final double TRAVEL_INTEGRAL=1+EXTRA*(1/EXPONENT-1/EXPO_DENOMINATOR);
     private static final double[] START={.06,.37,.66,.10,.36,.62,.80};
@@ -34,11 +34,11 @@ public final class FinaleWaves {
         return (extent*.86-radius*.28)*(.4*6*Math.exp(-6)/(1-Math.exp(-6))+.6)/(.91*duration);
     }
     /** Compression time; outward velocities below are measured in blocks per synchronized tick. */
-    public static double chargeDuration(FinaleTimeline timeline,int id) { return duration(timeline,id)*.09/BOOST; }
+    public static double chargeDuration(FinaleTimeline timeline,int id) { return duration(timeline,id)*.09/(BOOST*IMPACT_SPEED); }
     public static double baseVelocity(FinaleTimeline timeline,int id,double radius,double outer,double thickness) {
         double d=duration(timeline,id),e=extent(radius,outer,thickness);
         double oldFlight=d*.91+e*.86*(RANGE-1)/endVelocity(radius,e,d);
-        return BOOST*(terminal(radius,outer,thickness)-radius*.28)/oldFlight;
+        return IMPACT_SPEED*BOOST*(terminal(radius,outer,thickness)-radius*.28)/oldFlight;
     }
     public static double easeInExpo(double u) { return Math.expm1(EXPONENT*Math.max(0,Math.min(1,u)))/EXPO_DENOMINATOR; }
     public static double speedIntegral(double u) {

@@ -29,7 +29,7 @@ final class GlProgram implements AutoCloseable {
     private static String source(String file) throws java.io.IOException {
         try (var reader = Minecraft.getInstance().getResourceManager().openAsReader(new ResourceLocation(FoliageCompat.MOD_ID, "shaders/blackhole/" + file))) {
             String source = reader.lines().collect(java.util.stream.Collectors.joining("\n"));
-            for(String include:new String[]{"finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl"}) {
+            for(String include:new String[]{"finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl","finale_star_style.glsl"}) {
                 String directive="#include \""+include+"\"";
                 if(source.contains(directive)) source=source.replace(directive,source(include));
             }
@@ -45,6 +45,7 @@ final class GlProgram implements AutoCloseable {
     void use() { glUseProgram(program); }
     void integer(String name, int value) { glUniform1i(uniform(name), value); }
     void scalar(String name, double value) { glUniform1f(uniform(name), (float) value); }
+    void floats(String name, float[] values) { glUniform1fv(uniform(name), values); }
     void pair(String name, float first, float second) { glUniform2f(uniform(name), first, second); }
     void vector(String name, float first, float second, float third) { glUniform3f(uniform(name), first, second, third); }
     void matrix(String name, Matrix4f matrix) { try (var stack = MemoryStack.stackPush()) { glUniformMatrix4fv(uniform(name), false, matrix.get(stack.mallocFloat(16))); } }

@@ -29,6 +29,10 @@ public final class PixelTpManager {
     private static Map<UUID, Pending> runs(MinecraftServer server) {
         return RUNS.computeIfAbsent(server, ignored -> new HashMap<>());
     }
+    public static boolean isActive(ServerPlayer player) {
+        var active = RUNS.get(player.server);
+        return active != null && active.containsKey(player.getUUID());
+    }
     private static void validate(Vec3 position) {
         if (!Double.isFinite(position.x) || !Double.isFinite(position.y) || !Double.isFinite(position.z)
                 || !Level.isInSpawnableBounds(BlockPos.containing(position)))
@@ -43,7 +47,7 @@ public final class PixelTpManager {
             if (!player.isAlive()) throw new IllegalStateException("pixelTp: target player is not alive");
             if (!PixelTpNetwork.available(player))
                 throw new IllegalStateException("pixelTp: " + player.getGameProfile().getName() + " needs this mod's pixelTp client support");
-            if (active.containsKey(player.getUUID()))
+            if (active.containsKey(player.getUUID()) || com.mega.overheaven.foliagecompat.illusiontp.IllusionTpManager.isActive(player))
                 throw new IllegalStateException("pixelTp: " + player.getGameProfile().getName() + " already has an active transition");
         }
         for (ServerPlayer player : players) {

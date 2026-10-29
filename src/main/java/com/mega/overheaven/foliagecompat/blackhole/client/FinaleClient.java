@@ -19,7 +19,8 @@ public final class FinaleClient {
     private static boolean feedbackDiscontinuity;
     private static net.minecraft.client.CameraType lastCameraType;
     private static net.minecraft.world.entity.Entity lastCameraEntity;
-    private static long[] glass=new long[0],debris=new long[0];
+    private static final long[] NO_GLASS=new long[0];
+    private static long[] debris=new long[0];
     private static boolean failed;
     private static java.util.UUID failedRun;
     public static void accept(FinaleNetwork.Update update) {
@@ -29,7 +30,10 @@ public final class FinaleClient {
         if(fresh) { clear(); failed=false; }
         if(!fresh && Math.abs(update.elapsed()-ticks(0))>2) feedbackDiscontinuity=true;
         state=update; localTicks=0;
-        if(fresh || update.glass().length>0 || update.debris().length>0) { glass=update.glass().clone(); debris=update.debris().clone(); FinaleRenderer.INSTANCE.geometryChanged(); }
+        // Ignore legacy glass lists: geometry and spatial glass audio share glass().
+        if(fresh || update.glass().length>0 || update.debris().length>0) {
+            debris=update.debris().clone(); FinaleRenderer.INSTANCE.geometryChanged();
+        }
         if(fresh) { FinaleAudio.resetCursor(ticks(0)); FinaleRenderer.INSTANCE.prepareSky(); }
     }
     public static FinaleNetwork.Update state() { return state; }
@@ -53,7 +57,7 @@ public final class FinaleClient {
     public static boolean hideHud() { return active() && (stopping(0)>=0?stopping(0)<0.9:frame(0).phase()!=FinaleTimeline.Phase.RETURN || frame(0).progress()<0.9); }
     public static boolean source(String id) { return active() && state.hole().id().equals(id); }
     public static boolean skipWorld(float partial) { return active() && exposure(partial).coverage()>=1; }
-    public static long[] glass() { return glass; }
+    public static long[] glass() { return NO_GLASS; }
     public static long[] debris() { return debris; }
     public static void fail(Throwable error) { if(state!=null) failedRun=state.run(); com.mega.overheaven.foliagecompat.PatchLog.LOGGER.error("Finale renderer disabled for this session; input, HUD and sound restored",error); clear(); failed=true; }
     public static FinaleWaveFeedback feedback() { return feedback; }
@@ -73,7 +77,7 @@ public final class FinaleClient {
         feedbackDiscontinuity=false;
         event.setPitch(event.getPitch()+(float)(feedback.pitch+causalFeedback.pitch));event.setYaw(event.getYaw()+(float)(feedback.yaw+causalFeedback.yaw));event.setRoll(event.getRoll()+(float)(feedback.roll+causalFeedback.roll));
     }
-    public static void clear() { resetFeedback(); state=null; localTicks=0; glass=new long[0]; debris=new long[0]; FinaleAudio.close(); FinaleRenderer.INSTANCE.close(); BlackHoleRenderer.INSTANCE.clearOpening(); }
+    public static void clear() { resetFeedback(); state=null; localTicks=0; debris=new long[0]; FinaleAudio.close(); FinaleRenderer.INSTANCE.close(); BlackHoleRenderer.INSTANCE.clearOpening(); }
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { clear(); }
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent event) {
         if(event.phase!=TickEvent.Phase.END) return;

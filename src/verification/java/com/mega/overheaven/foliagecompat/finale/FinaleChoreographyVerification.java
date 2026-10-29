@@ -19,6 +19,8 @@ public final class FinaleChoreographyVerification {
                     var left=FinaleChoreography.motion(timeline,start-epsilon); var right=FinaleChoreography.motion(timeline,start+epsilon);
                     check(Math.abs(left.angle()-right.angle())<.0001,"angular position continuous "+phase);
                     check(Math.abs(left.speed()-right.speed())<.00001,"angular velocity continuous "+phase);
+                    var starLeft=FinaleChoreography.starMotion(timeline,start-epsilon);var starRight=FinaleChoreography.starMotion(timeline,start+epsilon);
+                    check(Math.abs(starLeft.angle()-starRight.angle())<.0001 && Math.abs(starLeft.speed()-starRight.speed())<.00001,"sky phase boundary continuous "+phase);
                     var previous=FinaleTimeline.Phase.values()[phase.ordinal()-1];
                     for(int layer=0;layer<4;layer++) check(Math.abs(FinaleChoreography.stem(layer,new FinaleTimeline.Frame(previous,1))-FinaleChoreography.stem(layer,new FinaleTimeline.Frame(phase,0)))<.00001,"stem envelope continuous "+phase+" layer="+layer);
                 }
@@ -32,7 +34,26 @@ public final class FinaleChoreographyVerification {
                         check(Double.isFinite(gain) && gain>=0 && gain<=1 && pitch>0 && pitch<=2,"bounded sound layer "+phase);
                     }
                     check(motion.equals(FinaleChoreography.motion(timeline,ticks)),"pause and late join deterministic");
+                    var starMotion=FinaleChoreography.starMotion(timeline,ticks);
+                    double starDerivative=(FinaleChoreography.starMotion(timeline,ticks+epsilon).angle()-FinaleChoreography.starMotion(timeline,ticks-epsilon).angle())/(2*epsilon/20);
+                    check(Math.abs(starDerivative-starMotion.speed())<.00001,"sky angular velocity matches integral "+phase);
+                    if(phase.ordinal()<5)check(starMotion.equals(motion),"rotation before extinction unchanged");
                 }
+            }
+            check(Math.abs(FinaleChoreography.motion(timeline,timeline.start(FinaleTimeline.Phase.SILENCE)).speed()+2.1)<1.e-8,"subject motion retains original terminal speed");
+            double extinctionStart=timeline.start(FinaleTimeline.Phase.EXTINGUISH),extinctionDuration=timeline.duration(FinaleTimeline.Phase.EXTINGUISH);
+            double previousSpeed=0;
+            for(int i=0;i<=100;i++) {
+                double progress=i/100.,tick=extinctionStart+extinctionDuration*progress;
+                var motion=FinaleChoreography.starMotion(timeline,tick);
+                check(Math.abs(motion.speed())>=previousSpeed-1.e-8,"extinction rotation accelerates monotonically");
+                previousSpeed=Math.abs(motion.speed());
+                if(progress>=.25) check(Math.abs(motion.speed()+8.4)<1.e-8,"4x terminal spin reached at quarter phase");
+            }
+            for(double progress:new double[]{.249999,.25,.250001}) {
+                double tick=extinctionStart+extinctionDuration*progress,epsilon=.00001;
+                double derivative=(FinaleChoreography.starMotion(timeline,tick+epsilon).angle()-FinaleChoreography.starMotion(timeline,tick-epsilon).angle())/(epsilon*.1);
+                check(Math.abs(derivative-FinaleChoreography.starMotion(timeline,tick).speed())<.00001,"capped ramp keeps analytical angular integral");
             }
             check(FinaleChoreography.motion(timeline,timeline.start(FinaleTimeline.Phase.REVERSE)).speed()>0 && FinaleChoreography.motion(timeline,timeline.start(FinaleTimeline.Phase.UNWEAVE)).speed()<0,"outflow reverses with continuous momentum");
         }
