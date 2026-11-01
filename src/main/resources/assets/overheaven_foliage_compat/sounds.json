@@ -44,24 +44,6 @@
       }
     ]
   },
-  "finale.crack": {
-    "sounds": [
-      {
-        "name": "overheaven_foliage_compat:finale/crack",
-        "stream": false,
-        "attenuation_distance": 32
-      }
-    ]
-  },
-  "finale.rupture": {
-    "sounds": [
-      {
-        "name": "overheaven_foliage_compat:finale/rupture",
-        "stream": false,
-        "attenuation_distance": 64
-      }
-    ]
-  },
   "finale.time_break": {
     "sounds": [
       {
@@ -140,6 +122,22 @@
         "name": "overheaven_foliage_compat:finale/causal_recoil",
         "stream": false,
         "attenuation_distance": 32
+      }
+    ]
+  },
+  "naidan.andi": {
+    "subtitle": "subtitles.overheaven_foliage_compat.naidan.andi",
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:naidan/andi"
+      }
+    ]
+  },
+  "naidan.laugh": {
+    "subtitle": "subtitles.overheaven_foliage_compat.naidan.laugh",
+    "sounds": [
+      {
+        "name": "overheaven_foliage_compat:naidan/laugh"
       }
     ]
   }

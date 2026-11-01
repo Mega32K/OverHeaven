@@ -115,7 +115,7 @@ public final class FinaleFlashGpuVerification {
                     glEndQuery(GL_TIME_ELAPSED); costs[variant]=glGetQueryObjectui64(query,GL_QUERY_RESULT)/36e6; glDeleteQueries(query);
                     image(selected.result,variant==0?"before-extinguish":"after-extinguish");
                 }
-                REPORT.append(String.format(Locale.ROOT,"same-context full-composition baseline %.3f ms / new %.3f ms / delta %+.3f ms%n",costs[0],costs[1],costs[1]-costs[0]));
+                REPORT.append(String.format(Locale.ROOT,"legacy-orchestration fixture (generic shaders/full-size auxiliary targets, NOT production performance): baseline %.3f ms / new %.3f ms / delta %+.3f ms%n",costs[0],costs[1],costs[1]-costs[0]));
             }
             expect(glGetError()==GL_NO_ERROR,"GL error-free after layers and quality switches");
             int texture=pipeline.cosmos.textures[0],framebuffer=pipeline.cosmos.framebuffer; pipeline.cosmos.close();

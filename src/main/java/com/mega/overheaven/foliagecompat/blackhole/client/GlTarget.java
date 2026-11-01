@@ -30,6 +30,7 @@ final class GlTarget implements AutoCloseable {
         glDrawBuffers(buffers);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { close(); throw new IllegalStateException("Black hole framebuffer incomplete"); }
     }
+    long bytes() { long stride=0;for(int format:formats) stride+=format==GL_RGBA32F?16:format==GL_RGBA16F?8:4;return (long)width*height*stride; }
     void bind() { glBindFramebuffer(GL_FRAMEBUFFER, framebuffer); glViewport(0, 0, width, height); }
     @Override public void close() {
         for (int index = 0; index < textures.length; index++) { if (textures[index] != 0) glDeleteTextures(textures[index]); textures[index] = 0; }

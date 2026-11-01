@@ -96,6 +96,7 @@ public final class BlackHoleLensVerification {
         try(var stream=Files.newInputStream(resources.resolve("../../textures/blackhole/disk_detail.png").normalize()); var detail=new GlDiskTexture(stream);
             var fill=new GlProgram(source("fullscreen.vsh"),fixture); var fixed=new GlProgram(source("fullscreen.vsh"),controlled);
             var integrate=program("integrate"); var composite=program("composite");
+            var edgeComposite=new GlProgram(source("fullscreen.vsh"),source("composite.fsh").substring(0,source("composite.fsh").indexOf("void main()"))+"uniform vec2 ProbeWarp;uniform float ProbeGuard;\nvoid main(){Color=vec4(backgroundAt(texCoord,ProbeWarp,ProbeGuard,1.,true,texture(Scene,texCoord).rgb),1);}");
             var opaque=new GlTarget(GL_RGBA16F,GL_R32F); var surface=new GlTarget(GL_RGBA16F,GL_R32F);
             var solution=new GlTarget(GL_RGBA16F,GL_RGBA16F,GL_RGBA32F,GL_RGBA32F); var bloom=new GlTarget(GL_RGBA16F); var result=new GlTarget(GL_RGBA16F)) {
             GlState.fullscreen(); opaque.resize(WIDTH,HEIGHT); surface.resize(WIDTH,HEIGHT); bloom.resize(1,1); result.resize(WIDTH,HEIGHT);
@@ -126,29 +127,23 @@ public final class BlackHoleLensVerification {
             solution.resize(2,1); opaque.bind(); fill.use(); fill.integer("Mode",1); draw();
             for(float edge:new float[]{-0.1f,0,0.001f,0.01f,0.02f,0.034f}) {
                 solution.bind(); fixed.use(); fixed.pair("Warp",edge,0.5f); fixed.scalar("Expected",1); fixed.integer("InvalidNeighbor",0); draw();
-                compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
+                edgeComposite.use();edgeComposite.pair("ProbeWarp",edge,.5f);edgeComposite.scalar("ProbeGuard",1);
+                compose(edgeComposite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
                 float[] color=center(result);
-                float margin=Math.max(0.5f/WIDTH,0.5f/HEIGHT), weight=Math.max(0,Math.min(1,(edge-margin)/(0.035f-margin))); weight=weight*weight*(3-2*weight);
+                float margin=Math.max(0.5f/WIDTH,0.5f/HEIGHT), weight=Math.max(0,Math.min(1,(edge-margin)/(margin*12-margin))); weight=weight*weight*(3-2*weight);
                 check(Math.abs(color[0]-(1-weight))<0.004f && Math.abs(color[2]-weight)<0.004f,"edge blends source colors, not a sweep of UVs "+edge);
                 check(color[1]<0.003f,"no intermediate green scenery at boundary");
             }
-            solution.bind(); fixed.use(); fixed.pair("Warp",0.01f,0.5f); fixed.integer("InvalidNeighbor",1); draw();
-            compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
-            check(center(result)[1]<0.003f,"invalid low-resolution neighbor never pulls lens UV across scenery");
-            solution.bind(); fixed.use(); fixed.integer("InvalidNeighbor",2); fixed.scalar("Expected",1); draw();
-            compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
-            check(center(result)[0]<0.003f && center(result)[1]>0.99f,"discontinuous valid UVs must not invent the red intermediate source");
-            image(pixels(result),output.resolve("discontinuous-valid-sources.png"));
-            solution.bind(); fixed.use(); fixed.integer("InvalidNeighbor",3); draw();
-            compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
-            check(center(result)[0]>0.99f,"continuous valid UV neighborhood retains interpolation");
-            opaque.bind(); fill.use(); fill.integer("Mode",2); draw();
-            solution.bind(); fixed.use(); fixed.integer("InvalidNeighbor",2); draw();
-            compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
-            float[] selected=pixels(result);
-            int leftSample=((HEIGHT/2)*WIDTH+WIDTH/2-8)*4, rightSample=((HEIGHT/2)*WIDTH+WIDTH/2+8)*4;
-            check(selected[leftSample]>0.99f && selected[leftSample+1]<0.003f,"left dominant valid neighbor selected");
-            check(selected[rightSample+2]>0.99f && selected[rightSample+1]<0.003f,"right dominant valid neighbor selected");
+            // Low-resolution mapping coordinates are no longer authoritative. Poisoning them
+            // must not move the full-resolution analytic lens or its source-depth guard.
+            solution.bind();fixed.use();fixed.integer("InvalidNeighbor",0);fixed.pair("Warp",.01f,.5f);draw();
+            compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);float[] analytic=pixels(result);
+            for(int poison=1;poison<=3;poison++) {
+                solution.bind();fixed.use();fixed.integer("InvalidNeighbor",poison);draw();
+                compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);float[] changed=pixels(result);
+                for(int i=0;i<changed.length;i++) check(Math.abs(changed[i]-analytic[i])<.001,"analytic lens independent of coarse mapping discontinuity");
+            }
+            image(analytic,output.resolve("analytic-lens.png"));
             try(var curve=new GlProgram(source("fullscreen.vsh"),"#version 330 core\nlayout(location=0) out vec4 Color;\n"+source("field.glsl")+"\nvoid main(){ Color=vec4(innerTransitionColor(vec3(1.0,0.2,0.05),mix(Radius,Inner,(gl_FragCoord.x-0.5)/4.0)),1.0); }");
                 var probe=new GlTarget(GL_RGBA32F)) {
                 probe.resize(5,1); probe.bind(); curve.use(); curve.scalar("Radius",3.2); curve.scalar("Inner",3.8); draw();
@@ -161,25 +156,29 @@ public final class BlackHoleLensVerification {
                     check(Math.abs(actualLuminance-luminance)<0.00001,"inner saturation preserves luminance");
                 }
             }
+            edgeComposite.use();edgeComposite.pair("ProbeWarp",.8f,.15f);
             for(float expected:new float[]{20,80}) {
+                edgeComposite.use();edgeComposite.scalar("ProbeGuard",expected);
                 opaque.bind(); fill.use(); fill.integer("Mode",0); fill.scalar("NearDepth",depth(0.2f)); draw();
                 solution.bind(); fixed.use(); fixed.pair("Warp",0.8f,0.15f); fixed.scalar("Expected",expected); fixed.integer("InvalidNeighbor",0); draw();
-                compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
+                compose(edgeComposite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
                 check(center(result)[0]<0.003f,"inside-sphere lens rejects a near source with a distant endpoint");
             }
             // A valid distant source must still distort the scene: this must not disable lensing.
             opaque.bind(); fill.use(); fill.scalar("NearDepth",depth(200)); draw();
+            edgeComposite.use();edgeComposite.scalar("ProbeGuard",200);
             solution.bind(); fixed.use(); fixed.scalar("Expected",200); draw();
-            compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
+            compose(edgeComposite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
             check(center(result)[0]>0.99f,"valid near-camera lens remains active");
+            edgeComposite.use();edgeComposite.scalar("ProbeGuard",20);
             solution.bind(); fixed.use(); fixed.scalar("Expected",20); draw();
-            compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
+            compose(edgeComposite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
             check(center(result)[0]>0.99f,"sky ray may lens distant terrain beyond the field exit");
             // One bad tap in the footprint is sufficient, including a texel not selected by nearest sampling.
             for(int tap=0;tap<4;tap++) {
                 opaque.bind(); fill.use(); draw();
                 glEnable(GL_SCISSOR_TEST); glScissor((int)Math.floor(0.8f*WIDTH-0.5f)+(tap&1),(int)Math.floor(0.15f*HEIGHT-0.5f)+(tap>>1),1,1); glClearBufferfv(GL_COLOR,1,new float[]{depth(0.2f),0,0,0}); glDisable(GL_SCISSOR_TEST);
-                compose(composite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
+                compose(edgeComposite,result,opaque,surface,solution,bloom,detail,0,-15,-8,48);
                 check(center(result)[0]<0.003f,"bilinear depth footprint rejects foreground tap "+tap);
             }
             check(glGetError()==GL_NO_ERROR,"no GL errors");

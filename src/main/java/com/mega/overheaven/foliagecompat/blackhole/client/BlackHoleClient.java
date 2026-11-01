@@ -5,6 +5,7 @@ import com.mega.overheaven.foliagecompat.blackhole.BlackHole;
 import com.mega.overheaven.foliagecompat.blackhole.BlackHoleNetwork;
 import com.mega.overheaven.foliagecompat.blackhole.BlackHoleReplica;
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import java.util.LinkedHashMap;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -22,6 +23,7 @@ public final class BlackHoleClient {
     private static final BlackHoleReplica REPLICA=new BlackHoleReplica();
     public static int steps = 48;
     public static double resolution = 0.5;
+    public static double spin = 0.6;
     public static boolean diagnostics = Boolean.getBoolean("overheaven.blackhole.diagnostics");
     public static void accept(BlackHoleNetwork.Update update) {
         REPLICA.accept(update);
@@ -43,9 +45,14 @@ public final class BlackHoleClient {
         for (String name : new String[]{"low", "balanced", "high"}) quality.then(Commands.literal(name).executes(context -> {
             steps = name.equals("low") ? 24 : name.equals("high") ? 96 : 48;
             resolution = name.equals("low") ? 0.375 : name.equals("high") ? 0.75 : 0.5;
-            context.getSource().sendSuccess(() -> Component.literal("Black hole quality: " + name + " (" + steps + " steps)"), false); return 1;
+            context.getSource().sendSuccess(() -> Component.literal("Black hole quality: " + name +
+                (name.equals("high")?" (Kerr, up to 512 RK4 steps, native resolution including the show)":" (" + steps + " steps)")), false); return 1;
         }));
         event.getDispatcher().register(Commands.literal("blackholeclient").then(quality)
+            .then(Commands.literal("spin").then(Commands.argument("value", DoubleArgumentType.doubleArg(-.95,.95)).executes(context -> {
+                spin = DoubleArgumentType.getDouble(context,"value");
+                context.getSource().sendSuccess(() -> Component.literal("High black hole spin a/M: " + spin), false); return 1;
+            })))
             .then(Commands.literal("diagnostics").then(Commands.argument("enabled", BoolArgumentType.bool()).executes(context -> {
                 diagnostics = BoolArgumentType.getBool(context, "enabled");
                 context.getSource().sendSuccess(() -> Component.literal("Black hole diagnostics: " + diagnostics), false); return 1;

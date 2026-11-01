@@ -106,10 +106,52 @@ public final class WaveRangeSpectrumGpuVerification {
         for(int pass=0;pass<3;pass++){for(int n=0;n<8;n++)draw.run();int q=glGenQueries();glBeginQuery(GL_TIME_ELAPSED,q);for(int n=0;n<32;n++)draw.run();glEndQuery(GL_TIME_ELAPSED);times[pass]=glGetQueryObjectui64(q,GL_QUERY_RESULT)/32e6;glDeleteQueries(q);}
         Arrays.sort(times);return times[1];
     }
+    /** Regression mode uses current lifetimes and a same-art snapshot, not old tuning thresholds. */
+    private static void preservation(Path before)throws Exception {
+        var timeline=com.mega.overheaven.foliagecompat.finale.FinaleTimeline.defaults();
+        try(var p=new FinaleFlashGpuVerification.Pipeline();var old=new FinaleFlashGpuVerification.Pipeline(before,null);
+            var fill=new GlProgram(read("fullscreen.vsh"),FIXTURE)) {
+            p.resize(48,.5f);old.resize(48,.5f);p.glareEnabled=old.glareEnabled=false;
+            for(int id=0;id<7;id++) {
+                double start=com.mega.overheaven.foliagecompat.finale.FinaleWaves.start(timeline,id);
+                double end=com.mega.overheaven.foliagecompat.finale.FinaleWaves.end(timeline,id,3.2,11,.16);
+                double tick=start+(end-start)*.60;
+                for(int display:new int[]{0,1}) {
+                    fill.use();fill.scalar("SceneGain",display==0?.08:1);
+                    int mode=display==0?1:0;
+                    float[] neutral=layer(p,fill,tick,false,display,mode),emission=pixels(p.solution);
+                    float[] actual=layer(p,fill,tick,true,display,mode);
+                    expect(Arrays.equals(emission,pixels(p.solution)),"wave "+id+" leaves emitted light unchanged");
+                    float[] oldNeutral=layer(old,fill,tick,false,display,mode),prior=layer(old,fill,tick,true,display,mode);
+                    double delta=difference(neutral,actual),previous=difference(oldNeutral,prior);
+                    expect(delta>.00001 && previous>.00001,"wave "+id+" active scenery spectrum, display="+display+" old="+previous+" new="+delta);
+                    // Compare each path to its own neutral background: lens reconstruction changed.
+                    expect(delta>=previous*.8,"wave "+id+" preserves spectrum magnitude against fixed current-art snapshot");
+                    finite(actual,"wave "+id+" finite pixels");
+                }
+                float[] front=layer(p,fill,tick,false,0,2),colored=layer(p,fill,tick,true,0,2);
+                expect(Arrays.equals(front,colored),"wave "+id+" foreground emission has no scenery tint");
+                // Keep the whole pressure shell behind the wall; the final wave later reaches the camera.
+                double blockedTick=start+(end-start)*.25;
+                prepare(p,fill,1,false);p.spectrumEnabled=false;p.subject(blockedTick,VIEW,0,-32,true);float[] wall=pixels(p.cosmos);
+                prepare(p,fill,1,false);p.spectrumEnabled=true;p.subject(blockedTick,VIEW,0,-32,true);
+                expect(Arrays.equals(wall,pixels(p.cosmos)),"wave "+id+" wall blocks scenery dispersion");
+            }
+            for(double tick:new double[]{0,160,1000,2288}) {
+                float[] off=layer(p,fill,tick,false,1,0),on=layer(p,fill,tick,true,1,0);
+                expect(Arrays.equals(off,on),"inactive wave leaves scene unchanged at "+tick);
+            }
+            expect(glGetError()==GL_NO_ERROR,"wave regression GL state");
+        }
+        System.out.println(REPORT);
+    }
     public static void main(String[] args)throws Exception {
         source=Path.of(args[0]);output=Path.of(args[1]);Path before=Path.of(args[2]);Files.createDirectories(output);
         expect(glfwInit(),"GLFW initialized");glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
         long window=glfwCreateWindow(64,64,"wave scenery spectrum",0,0);expect(window!=0,"hidden context");glfwMakeContextCurrent(window);GL.createCapabilities();vao=glGenVertexArrays();
+        if(args.length>3 && args[3].equals("preserve")) {
+            try {preservation(before);} finally {glDeleteVertexArrays(vao);glfwDestroyWindow(window);glfwTerminate();}return;
+        }
         REPORT.append("GPU ").append(glGetString(GL_RENDERER)).append("; 1920x1080 balanced; fixed seed/camera/time; production shaders, synthetic scene, no host/game execution.\n");
         try(var p=new FinaleFlashGpuVerification.Pipeline();var old=new FinaleFlashGpuVerification.Pipeline(before,null);
             var fill=new GlProgram(read("fullscreen.vsh"),FIXTURE);var nowProbe=probe(source);var oldProbe=probe(before);var target=new GlTarget(GL_RGBA32F)){

@@ -72,6 +72,7 @@ dependencies {
     // Oculus requires Embeddium in the development runtime; Modrinth POMs omit this dependency.
     runtimeOnly fg.deobf('maven.modrinth:embeddium:UTbfe5d1') // 0.3.31+mc1.20.1
     implementation fg.deobf('maven.modrinth:endinglibrary:KwxldfZc')
+    implementation fg.deobf('maven.modrinth:geckolib:LwI6czff') // Forge 1.20.1, GeckoLib 4.7
     compatibilityArtifacts swayDependency
     compatibilityArtifacts foliageDependency
     compatibilityArtifacts oculusDependency
@@ -152,6 +153,20 @@ tasks.register('verifyBlackHole', JavaExec) {
     mainClass = 'com.mega.overheaven.foliagecompat.BlackHoleVerification'
 }
 tasks.named('check') { dependsOn 'verifyBlackHole' }
+
+// Explicit, headless shelf checks. Do not attach to check, which also packages the mod.
+tasks.register('verifyShelves', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.shelf.ShelfVerification'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+    doFirst {
+        def output = file(providers.gradleProperty('shelfVerificationDir').getOrElse("build/verification/shelves-${System.currentTimeMillis()}"))
+        output.mkdirs()
+        workingDir output
+    }
+}
 tasks.register('verifyBlackHoleContracts', JavaExec) {
     group = 'verification'
     dependsOn tasks.named('verificationClasses')
@@ -185,6 +200,27 @@ tasks.register('verifyBlackHoleLens', JavaExec) {
     mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.BlackHoleLensVerification'
     args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
          file('audit/near-camera-2026-10-26/gpu').absolutePath
+}
+
+// Explicit high-quality checks; deliberately not attached to check or packaging.
+tasks.register('verifyRelativisticGpu', JavaExec) {
+    group = 'verification'
+    description = 'Checks high-quality geodesics against analytic anchors and a supplied shader snapshot in a hidden GL context.'
+    dependsOn tasks.named('verificationClasses')
+    classpath = sourceSets.verification.runtimeClasspath + configurations.verificationRuntimeClasspath
+    mainClass = 'com.mega.overheaven.foliagecompat.blackhole.client.RelativisticGpuVerification'
+    doFirst {
+        def baseline = providers.gradleProperty('blackHoleBaselineShaders')
+        if (!baseline.isPresent() || !file(baseline.get() + '/field.glsl').isFile()) {
+            throw new GradleException('Pass -PblackHoleBaselineShaders=<before-snapshot shader directory>')
+        }
+        def output = file(providers.gradleProperty('blackHoleVerificationDir').getOrElse("build/verification/high-${System.currentTimeMillis()}"))
+        if (output.exists()) throw new GradleException("Use a new verification directory to preserve evidence: ${output}")
+        output.mkdirs()
+        workingDir output
+        args file('src/main/resources/assets/overheaven_foliage_compat/shaders/blackhole').absolutePath,
+             file(baseline.get()).absolutePath, output.absolutePath
+    }
 }
 
 // Explicit hidden-GPU regression; never starts Minecraft.

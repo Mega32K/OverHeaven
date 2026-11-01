@@ -1,4 +1,5 @@
 {
+  "item.overheaven_foliage_compat.seawater_filter": "Seawater Filter",
   "item.overheaven_foliage_compat.playing_card_2": "Playing Card 2",
   "item.overheaven_foliage_compat.playing_card_3": "Playing Card 3",
   "item.overheaven_foliage_compat.playing_card_4": "Playing Card 4",
@@ -11,5 +12,19 @@
   "item.overheaven_foliage_compat.playing_card_j": "Playing Card J",
   "item.overheaven_foliage_compat.playing_card_q": "Playing Card Q",
   "item.overheaven_foliage_compat.playing_card_k": "Playing Card K",
-  "item.overheaven_foliage_compat.playing_card_a": "Playing Card A"
+  "item.overheaven_foliage_compat.playing_card_a": "Playing Card A",
+  "block.overheaven_foliage_compat.oak_shelf": "Oak Shelf",
+  "block.overheaven_foliage_compat.spruce_shelf": "Spruce Shelf",
+  "block.overheaven_foliage_compat.birch_shelf": "Birch Shelf",
+  "block.overheaven_foliage_compat.jungle_shelf": "Jungle Shelf",
+  "block.overheaven_foliage_compat.acacia_shelf": "Acacia Shelf",
+  "block.overheaven_foliage_compat.dark_oak_shelf": "Dark Oak Shelf",
+  "block.overheaven_foliage_compat.mangrove_shelf": "Mangrove Shelf",
+  "block.overheaven_foliage_compat.cherry_shelf": "Cherry Shelf",
+  "block.overheaven_foliage_compat.bamboo_shelf": "Bamboo Shelf",
+  "block.overheaven_foliage_compat.crimson_shelf": "Crimson Shelf",
+  "block.overheaven_foliage_compat.warped_shelf": "Warped Shelf",
+  "block.overheaven_foliage_compat.naidan": "Naidan",
+  "subtitles.overheaven_foliage_compat.naidan.andi": "Naidan: Andi",
+  "subtitles.overheaven_foliage_compat.naidan.laugh": "Naidan: Laughing"
 }

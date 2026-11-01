@@ -48,6 +48,7 @@ public final class BlackHoleGpuVerification {
     private static void draw() { glBindVertexArray(vertexArray); glDrawArrays(GL_TRIANGLES,0,3); }
     private static void clear(GlTarget target,float first,float second,float third,float alpha) { target.bind(); glClearBufferfv(GL_COLOR,0,new float[]{first,second,third,alpha}); }
     private static float depth(float distance) { var point=PROJECTION.transform(new org.joml.Vector4f(0,0,-distance,1)); return point.z/point.w*0.5f+0.5f; }
+    private static final DiskAdvection advection=new DiskAdvection();
     private static void material(GlProgram program,GlTarget opaque,GlTarget surface,int steps,float brightness) {
         currentSteps=steps; program.scalar("Glow",previewGlow);
         program.matrix("VP",PROJECTION); program.matrix("InverseVP",INVERSE); program.vector("Eye",0,0,0); program.vector("Center",0,0,-centerDistance);
@@ -59,6 +60,7 @@ public final class BlackHoleGpuVerification {
         program.scalar("Rotation",0.25); program.scalar("Infall",0.12); program.scalar("Lensing",1); program.scalar("Time",materialTime); program.scalar("Seed",12); program.integer("Steps",steps);
         program.texture("OpaqueDepth",8,opaque.textures[1]); program.texture("SurfaceDepth",9,surface.textures[1]);
         program.texture("DiskTexture",10,diskTexture.handle());
+        advection.evaluate(materialTime,.25,.12,7.2,12); advection.apply(program);
     }
     private static void solve(GlProgram program,GlTarget solution,GlTarget opaque,GlTarget surface,int steps,float brightness) {
         solution.bind(); program.use(); material(program,opaque,surface,steps,brightness); program.scalar("PixelAngle",2.0/(PROJECTION.m11()*solution.height)); draw();
@@ -167,7 +169,11 @@ public final class BlackHoleGpuVerification {
         clear(surface,1,1,1,1); glClearBufferfv(GL_COLOR,1,new float[]{depth(200),0,0,0});
         clear(solution,0,0,0,1); glClearBufferfv(GL_COLOR,1,new float[]{0,0,0,1}); glClearBufferfv(GL_COLOR,2,new float[]{0,0,65504,65504});
         bloom(blur,bloomTemp,bloom,solution,surface,opaque);
-        check(energy(pixels(pyramid.result()))>1,"core rim alone contributes to bloom source");
+        check(energy(pixels(pyramid.result()))==0,"ordinary dark core alone emits no bloom");
+        blur.use();blur.integer("IntroEnabled",1);blur.scalar("IntroTighten",1);blur.scalar("IntroCapture",1);blur.scalar("IntroBodyScale",1);
+        bloom(blur,bloomTemp,bloom,solution,surface,opaque);
+        check(energy(pixels(pyramid.result()))>1,"opening tightening still emits its cinematic rim");
+        blur.use();blur.integer("IntroEnabled",0);
         int reused=pyramid.result().textures[0]; pyramid.resize(WIDTH,HEIGHT,48); check(pyramid.result().textures[0]==reused,"same-size pyramid is reused");
         glBindTexture(GL_TEXTURE_2D,reused); check(glGetTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER)==GL_LINEAR,"bloom color uses linear filtering");
         glBindTexture(GL_TEXTURE_2D,opaque.textures[1]); check(glGetTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER)==GL_NEAREST,"scene depth remains nearest");
@@ -203,7 +209,7 @@ public final class BlackHoleGpuVerification {
             diskTexture=disk; pyramid=ownedBloom;
             check(copy.handle()!=0 && integrate.handle()!=0 && composite.handle()!=0 && blur.handle()!=0 && foreground.handle()!=0,"five production shaders linked");
             for(String uniform:new String[]{"VP","InverseVP","Eye","Center","Steps","OpaqueDepth","SurfaceDepth","DiskTexture","PixelAngle"}) check(glGetUniformLocation(integrate.handle(),uniform)>=0,"integrator uniform "+uniform);
-            for(String uniform:new String[]{"Scene","Transmission","Opaque","FrontTexture","BackTexture","LensTexture","MetaTexture","Bloom"}) check(glGetUniformLocation(composite.handle(),uniform)>=0,"composite uniform "+uniform);
+            for(String uniform:new String[]{"Scene","Transmission","Opaque","FrontTexture","BackTexture","MetaTexture","Bloom"}) check(glGetUniformLocation(composite.handle(),uniform)>=0,"composite uniform "+uniform);
             opaque.resize(WIDTH,HEIGHT); surface.resize(WIDTH,HEIGHT); scene.resize(WIDTH,HEIGHT); solution.resize(WIDTH/2,HEIGHT/2); bloom.resize(WIDTH/4,HEIGHT/4); bloomTemp.resize(WIDTH/4,HEIGHT/4); result.resize(WIDTH,HEIGHT); frontLayer.resize(WIDTH,HEIGHT); frontResolve.resize(WIDTH,HEIGHT);
             try(var seam=new GlProgram(source("fullscreen.vsh"),"#version 330 core\nlayout(location=0) out vec4 Color;\n"+source("field.glsl")+"\nvoid main(){ vec2 p=gl_FragCoord.x<1.5?vec2(-7.0,0.0001):vec2(-7.0,-0.0001); Color=vec4(diskMaterial(p,0.001),1.0); }")) {
                 var probe=new GlTarget(GL_RGBA32F);

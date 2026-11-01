@@ -9,7 +9,7 @@ OUT = ROOT / 'src/main/resources/assets/overheaven_foliage_compat/sounds/finale'
 RATE = 32000
 LOOPS = ('hum', 'pressure', 'grain', 'tail')
 DURATIONS = dict(hum=12, pressure=12, grain=12, tail=12, ignite=2.2,
-                 pulse=3.2, crack=1.8, rupture=4.8, impact=5.5,
+                 pulse=3.2, impact=5.5,
                  reverse=4.5, time_break=2.8, fold=3.6)
 TAU = math.tau
 
@@ -43,19 +43,6 @@ def sample(name, t, noise, low, channel):
         return (.29*sine(1760, t)+.19*sine(2639.5, t)+low*.45) * (1-math.exp(-t*70))*math.exp(-t*3.4)
     if name == 'pulse':
         return (.55*math.sin(TAU*(72*t-6*t*t))+.8*low+.04*noise)*min(1,t/.025)*math.exp(-t*1.65)
-    if name == 'crack':
-        value = 0
-        for start, strength in ((0,.7),(.09,.5),(.26,.8),(.41,.35),(.64,.25)):
-            age = t-start
-            if age >= 0:
-                value += (noise*.32+sine(2380,age)*.14+sine(3711,age)*.09)*strength*math.exp(-age*32)*min(1,age/.001)
-        return value
-    if name == 'rupture':
-        # High transient, scattered glass resonances, long sparse decay; no bass duplication.
-        value = noise*.36*math.exp(-t*9)*min(1,t/.001)
-        for index, frequency in enumerate((1673, 2401, 3067, 4231, 5581)):
-            value += sine(frequency, t, index*.7)*.08*math.exp(-t*(2.1+index*.9))*(.5+.5*sine(7+index,t))
-        return value
     if name == 'impact':
         return (.58*math.sin(TAU*(56*t-2.4*t*t))+.15*sine(31,t)+low*1.25+noise*.06)*min(1,t/.008)*math.exp(-t*1.3)
     if name == 'reverse':
@@ -70,8 +57,9 @@ def sample(name, t, noise, low, channel):
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for index, (name, duration) in enumerate(DURATIONS.items()):
-        rng = random.Random(3999+index*171)
-        channels = 1 if name in ('crack', 'rupture') else 2
+        seed_index = index if index<6 else index+2
+        rng = random.Random(3999+seed_index*171)
+        channels = 2
         values = array.array('f'); low = 0
         for i in range(round(RATE*duration)):
             t = i/RATE; noise = rng.uniform(-1, 1); low = .985*low+.015*noise

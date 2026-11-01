@@ -24,6 +24,10 @@ public final class FinaleNetwork {
             if(hole!=null && (!hole.dimension().equals(dimension) || elapsed>timeline.total())) throw new IllegalArgumentException("Invalid finale dimension/time");
             glass=glass.clone(); debris=debris.clone();
         }
+        /** Preserve wire compatibility without retaining retired effect data on the client. */
+        public Update withoutFragments() {
+            return glass.length==0 && debris.length==0?this:new Update(dimension,run,hole,timeline,elapsed,paused,preparing,stopping,serverTick,new long[0],new long[0]);
+        }
         public static Update clear(String dimension,long time) { return new Update(dimension,new UUID(0,0),null,FinaleTimeline.defaults(),0,false,false,-1,time,new long[0],new long[0]); }
         public void encode(FriendlyByteBuf out) {
             out.writeUtf(dimension,256); out.writeUUID(run); out.writeBoolean(hole!=null); out.writeLong(serverTick);

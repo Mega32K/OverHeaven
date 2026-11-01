@@ -17,6 +17,9 @@ uniform float Infall;
 uniform float Lensing;
 uniform float Glow;
 uniform float Time;
+uniform int DiskRenewal;
+uniform int SkipFieldLens;
+uniform vec4 DiskPhase0,DiskPhase1;
 uniform float Seed;
 uniform float FinaleAmount;
 uniform float FinaleProgress;
@@ -26,11 +29,19 @@ uniform int FinalePhase;
 uniform int IntroEnabled;
 uniform float IntroCharge,IntroTighten,IntroCapture,IntroDisk,IntroBurst,IntroFlow;
 uniform float IntroBodyScale;
+uniform int Relativistic;
+uniform float Spin;
+uniform vec4 DiskClock;
+bool relativistic() { return Relativistic!=0; }
+vec3 finiteHighRadiance(vec3 light) { return relativistic()?min(light,vec3(60000.)):light; }
+// Radius is the asymptotic shadow impact radius at Lensing=1, not the horizon.
+float gravitationalRadius() { return Radius*max(Lensing,0.)/5.196152423; }
 float bodyScale() { return IntroEnabled!=0?IntroBodyScale:1.; }
-float bodyExtent() { return (Outer*1.35+Thickness*2.)*max(1.,bodyScale()); }
+float bodyExtent() { return (relativistic()?max(Outer*1.35+Thickness*2.,32.*gravitationalRadius()):Outer*1.35+Thickness*2.)*max(1.,bodyScale()); }
 float coreRadius() { return Radius*(IntroEnabled!=0?IntroCapture*bodyScale():1.0-clamp(FinaleAmount,0.0,1.0)); }
 uniform int Steps;
 uniform float PixelAngle;
+uniform vec2 SceneSize;
 uniform sampler2D DiskTexture;
 uniform sampler2D OpaqueDepth;
 uniform sampler2D SurfaceDepth;
@@ -40,6 +51,43 @@ vec3 innerTransitionColor(vec3 color, float radialDistance) {
     float saturation=0.5*fraction*fraction*(3.0-2.0*fraction);
     float luminance=dot(color,vec3(0.2126,0.7152,0.0722));
     return mix(vec3(luminance),color,saturation);
+}
+
+// The horizon is an absorber. Only the opening's tightening envelope emits a rim;
+// extraction and final composition must use exactly the same source radiance.
+vec3 introHorizonRim(float impact,float footprint) {
+    if(relativistic()) return vec3(0.); // High obtains its bright edge from the traced disk images.
+    if(IntroEnabled==0 || IntroTighten<=0. || FinaleAmount>=.99999) return vec3(0.);
+    float rim=exp(-abs(impact-coreRadius())/max(footprint*1.3,Radius*.003));
+    return innerTransitionColor(HotColor,Radius)*rim*Brightness*.9*IntroTighten;
+}
+float wideBloomGain() {
+    return mix(relativistic()?.12:.4,1.,max(clamp(FinaleAmount,0.,1.),IntroEnabled!=0?IntroTighten:0.));
+}
+vec3 displayLight(vec3 light) {
+    // Only our emitted light is mapped here. Shader packs still receive linear HDR.
+    float peak=max(light.r,max(light.g,light.b));
+    vec3 mapped=light/(vec3(1.)+light);
+    return relativistic()?mix(light/(1.+peak),mapped,clamp(FinaleAmount,0.,1.)):mapped;
+}
+// Dimensionless r^-3(1-sqrt(r_in/r)), normalized over this disk's actual interval.
+// A narrow disk keeps a bright band even when it ends before the unconstrained peak.
+float diskRadialEmission(float radius) {
+    float ratio=Inner/max(radius,Inner);
+    float peakRatio=Inner/min(Outer,Inner*(49./36.));
+    float peak=peakRatio*peakRatio*peakRatio*(1.-sqrt(peakRatio));
+    return ratio*ratio*ratio*(1.-sqrt(ratio))/max(peak,1e-8);
+}
+// Gas velocity and the local, curved direction toward the observer share world space.
+// Rotation changes velocity sign, while a frozen animation clock does not change it.
+vec3 diskDoppler(vec3 position,vec3 ray,float radius) {
+    vec3 tangent=DiskForward*dot(position,DiskRight)-DiskRight*dot(position,DiskForward);
+    tangent*=inversesqrt(max(dot(tangent,tangent),1e-12))*sign(Rotation);
+    float beta=min(.45,.30*sqrt(abs(Rotation)/.25)*sqrt(Inner/max(radius,Inner)));
+    float mu=clamp(dot(tangent,-normalize(ray)),-1.,1.);
+    float shift=sqrt(1.-beta*beta)/(1.-beta*mu);
+    float tint=clamp((shift-1.)*2.,-1.,1.)*.08;
+    return shift*shift*shift*vec3(1.-tint,1.,1.+tint);
 }
 
 vec3 pointAt(vec2 uv, float depth) {
@@ -62,27 +110,38 @@ vec3 diskLookup(vec2 coordinate, vec2 footprint) {
     float lod = max(0.0, log2(max(max(texels.x, texels.y), 1.0)));
     return textureLod(DiskTexture, coordinate, lod).rgb;
 }
-vec3 diskMaterial(vec2 disk, float footprint) {
+vec3 diskCohort(vec2 disk,float footprint,float age,float anchor,float offset,float flowPhase) {
     float radius = max(length(disk), 0.001);
     float span = max(Outer - Inner, 0.001);
     float orbit = atan(disk.y, disk.x) / 6.28318530718;
-    orbit -= (Time * Rotation + (IntroEnabled!=0?IntroFlow*1.7:0.0)) * pow(Inner / radius, 1.5) / 6.28318530718;
-    float flow = (radius - Inner + Time * Infall + (IntroEnabled!=0?IntroFlow*span*.85:0.0)) / span;
+    float orbitRadius=relativistic()?6.*gravitationalRadius():Inner;
+    orbit -= (age * Rotation + (IntroEnabled!=0?IntroFlow*1.7:0.0)) * pow(orbitRadius / radius, 1.5) / 6.28318530718;
+    orbit-=anchor;
+    float flow = (radius-Inner+(IntroEnabled!=0?IntroFlow*span*.85:0.0))/span+flowPhase;
     vec2 base = vec2(orbit, flow);
     vec2 width = vec2(footprint / (6.28318530718 * radius), footprint / span);
     // Include radial orbital shear in the LOD; long-running animation must not shimmer.
-    width.x += abs(Time*Rotation)*pow(Inner/radius,1.5)*1.5*footprint/(6.28318530718*radius);
-    vec2 offset = vec2(Seed * 0.071, Seed * 0.137);
-    vec3 clouds = diskLookup(base * vec2(5.0, 1.0) + offset, width * vec2(5.0, 1.0));
-    vec3 folds = diskLookup(base * vec2(11.0, 3.0) - offset, width * vec2(11.0, 3.0));
-    vec3 grain = diskLookup(base * vec2(23.0, 6.0) + offset.yx, width * vec2(23.0, 6.0));
-    vec3 filaments = diskLookup(base * vec2(3.0, 7.0) + vec2(clouds.g*0.12,folds.b*0.08) + offset,
+    width.x += abs(age*Rotation+(IntroEnabled!=0?IntroFlow*1.7:0.0))*pow(orbitRadius/radius,1.5)*1.5*footprint/(6.28318530718*radius);
+    vec2 seedOffset = vec2(Seed * 0.071+offset, Seed * 0.137+offset*.731);
+    vec3 clouds = diskLookup(base * vec2(5.0, 1.0) + seedOffset, width * vec2(5.0, 1.0));
+    vec3 folds = diskLookup(base * vec2(11.0, 3.0) - seedOffset, width * vec2(11.0, 3.0));
+    vec3 grain = diskLookup(base * vec2(23.0, 6.0) + seedOffset.yx, width * vec2(23.0, 6.0));
+    vec3 filaments = diskLookup(base * vec2(3.0, 7.0) + vec2(clouds.g*0.12,folds.b*0.08) + seedOffset,
         width * vec2(6.0, 10.0));
     float clumps = smoothstep(0.32,0.68,clouds.r*0.8+folds.g*0.2);
     float threads = smoothstep(0.25,0.78,filaments.r);
     float coverage = 0.025 + pow(clumps,1.5)*(0.25+threads*1.25)*(0.55+grain.b*0.7);
     float radiation = 0.025 + pow(clumps,2.0)*(0.35+threads*2.2)*(0.4+folds.r*1.2);
     return vec3(coverage, radiation, clouds.b);
+}
+vec3 diskMaterial(vec2 disk,float footprint) {
+    // The legacy uniforms remain usable by older independent fixtures only.
+    if(DiskRenewal==0) return diskCohort(disk,footprint,Time,0.,0.,Time*Infall/max(Outer-Inner,.001));
+    if(DiskPhase0.w<=0.) return diskCohort(disk,footprint,DiskPhase1.x,DiskPhase1.y,DiskPhase1.z,DiskPhase1.w);
+    vec3 a=diskCohort(disk,footprint,DiskPhase0.x,DiskPhase0.y,DiskPhase0.z,DiskPhase1.w);
+    if(DiskPhase0.w>=1.) return a;
+    vec3 b=diskCohort(disk,footprint,DiskPhase1.x,DiskPhase1.y,DiskPhase1.z,DiskPhase1.w);
+    return mix(b,a,DiskPhase0.w);
 }
 // Environment deflection is independent of disk opacity and integration steps.
 // Integrate the softened transverse inverse-square force along the visible chord.
@@ -132,7 +191,7 @@ Field ordinaryField(vec2 uv) {
     // meta.w is the minimum camera distance of a valid background source, or -1.
     result.meta = vec4(opaque, surface, coreHit < opaque ? 1.0 : 0.0, -1.0);
     if (bounds.y <= 0.0 || max(bounds.x, 0.0) >= opaque) return result;
-    if(coreHit>=opaque) {
+    if(SkipFieldLens==0 && coreHit>=opaque) {
         vec3 mapping=environmentLens(uv,direction,opaque,sphere(origin,direction,Outer*1.35+Thickness*2.));
         result.lens.xy=mapping.xy; result.meta.w=mapping.z;
     }
@@ -167,7 +226,7 @@ Field ordinaryField(vec2 uv) {
                 vec2 disk = vec2(dot(gas, DiskRight), dot(gas, DiskForward));
                 float radius = length(disk);
                 if (radius <= diskInner || radius >= diskOuter) continue;
-                float radialMask = smoothstep(diskInner, diskInner + (diskOuter-diskInner)*0.04, radius) * (1.0-smoothstep(diskOuter*0.74, diskOuter, radius));
+                float radialMask = smoothstep(diskInner, diskInner + (diskOuter-diskInner)*0.04, radius) * (1.0-smoothstep(max(diskInner+(diskOuter-diskInner)*.5,diskOuter*.74), diskOuter, radius));
                 float grazing = sqrt(max(0.0,1.0-pow(dot(velocity,DiskNormal),2.0)));
                 float footprint = max(max(travel,1.0)*PixelAngle, subLength*grazing*0.35);
                 vec3 material = diskMaterial(disk/scale,footprint/scale);
@@ -176,13 +235,13 @@ Field ordinaryField(vec2 uv) {
                 float optical = radialMask * material.x * vertical * subLength / max(diskThickness,0.02);
                 float absorption = 1.0-exp(-optical*1.4);
                 float heat = pow(clamp((diskOuter-radius)/(diskOuter-diskInner),0.0,1.0),1.35);
-                vec3 emission = mix(ColdColor,HotColor,smoothstep(0.10,0.74,heat)) * Brightness * (0.16+heat*3.3);
+                vec3 emission = mix(ColdColor,HotColor,smoothstep(0.10,0.74,heat)) * Brightness * (3.46*diskRadialEmission(radius/scale));
                 emission *= material.y * 0.5;
                 if(IntroEnabled!=0) {
                     float white=IntroTighten*.88; float lum=dot(emission,vec3(.2126,.7152,.0722));
                     emission=mix(emission,vec3(lum)*vec3(.94,.975,1.04),white)*(1.+IntroCharge*.55+IntroTighten*2.8);
                 }
-                float doppler = 1.0+0.28*dot(normalize(cross(DiskNormal,gas)),direction);
+                vec3 doppler = diskDoppler(gas,mix(velocity,nextVelocity,midpoint),radius/scale);
                 float segmentDistance = travel+midpoint*stepSize;
                 float subBegin = travel+stepSize*mix(begin,end,float(gasTap)*0.5);
                 float frontFraction = clamp((surface-subBegin)/max(subLength,0.00001),0.0,1.0);
@@ -202,15 +261,18 @@ Field ordinaryField(vec2 uv) {
                 vec3 hazePosition=mix(position,nextPosition,hazeFraction);
                 float hazeHeight=dot(hazePosition,DiskNormal);
                 float hazeRadius=length(hazePosition-DiskNormal*hazeHeight);
-                float hazeWidth=max(bodyRadius*0.35,diskThickness*3.0);
+                float hazeWidth=max(bodyRadius*0.12,diskThickness*1.5);
                 vec2 hazeOffset=vec2(hazeRadius-diskInner,hazeHeight*1.6)/hazeWidth;
                 float hazeSquared=dot(hazeOffset,hazeOffset);
                 if(hazeSquared>=6.25) continue;
                 float hazeDensity=exp(-hazeSquared*1.8)*(1.0-smoothstep(2.25,6.25,hazeSquared));
+                hazeDensity*=smoothstep(diskInner,diskInner+min(hazeWidth,(diskOuter-diskInner)*.25),hazeRadius)
+                    *(1.-smoothstep(max(diskInner+(diskOuter-diskInner)*.5,diskOuter*.74),diskOuter,hazeRadius));
                 float hazeLength=stepSize*0.5;
                 float hazeStart=travel+float(hazeTap)*hazeLength;
                 float hazeFront=clamp((surface-hazeStart)/max(hazeLength,0.00001),0.0,1.0);
-                vec3 hazeLight=innerTransitionColor(HotColor,hazeRadius/scale)*Brightness*Glow*0.11*hazeDensity*hazeLength/hazeWidth;
+                vec3 hazeLight=innerTransitionColor(HotColor,hazeRadius/scale)*Brightness*Glow*0.035*hazeDensity*hazeLength/hazeWidth
+                    *diskDoppler(hazePosition,mix(velocity,nextVelocity,hazeFraction),hazeRadius/scale);
                 result.front.rgb+=result.front.a*hazeLight*hazeFront;
                 result.back.rgb+=result.back.a*hazeLight*(1.0-hazeFront);
                 if(hazeDensity>0.0001 && hazeFront>0.0) result.lens.z=min(result.lens.z,hazeStart);
@@ -221,6 +283,9 @@ Field ordinaryField(vec2 uv) {
     }
     return result;
 }
+
+#include "schwarzschild.glsl"
+#include "kerr.glsl"
 
 // Singularity radiance has the same opaque/transparent segmentation as the ordinary disk.
 void finaleLight(inout Field f,vec3 light,float distance,float opaque,float surface) {
@@ -321,17 +386,17 @@ Field finaleField(vec2 uv) {
     vec3 pointLight=vec3(1.,.985,.965)*(point*(14.+FinalePulse*22.)+corona*(.58+FinalePulse*1.8))*Brightness*fade;
     finaleLight(f,pointLight,closest,opaque,surface);
     vec2 bounds=sphere(origin,direction,Outer*1.35+Thickness*2.);
-    if(bounds.y>0. && max(bounds.x,0.)<opaque) {
+    if(SkipFieldLens==0 && bounds.y>0. && max(bounds.x,0.)<opaque) {
         vec3 mapping=environmentLens(uv,direction,opaque,bounds); f.lens.xy=mapping.xy; f.meta.w=mapping.z;
     }
     finaleEnergy(f,origin,direction,opaque,surface,fade);
     return f;
 }
 Field integrate(vec2 uv) {
-    if(FinaleAmount<=.00001) return ordinaryField(uv);
+    if(FinaleAmount<=.00001) return relativistic()?kerrField(uv):ordinaryField(uv);
     Field show=finaleField(uv);
     if(FinaleAmount>=.99999) return show;
-    Field base=ordinaryField(uv);
+    Field base=relativistic()?kerrField(uv):ordinaryField(uv);
     float disk=IntroEnabled!=0?IntroDisk:1.-FinaleAmount;
     base.front.rgb=base.front.rgb*disk+show.front.rgb*FinaleAmount;
     base.back.rgb=base.back.rgb*disk+show.back.rgb*FinaleAmount;
@@ -339,6 +404,6 @@ Field integrate(vec2 uv) {
     base.lens.zw=min(base.lens.zw,show.lens.zw);
     // Both fields share the exact current core/deflection state. Select a valid source;
     // never interpolate a projection or its guard through an invalid coordinate.
-    if(base.meta.z<.5 && show.meta.w>=0.) { base.lens.xy=show.lens.xy; base.meta.w=show.meta.w; }
+    if(!relativistic() && base.meta.z<.5 && show.meta.w>=0.) { base.lens.xy=show.lens.xy; base.meta.w=show.meta.w; }
     return base;
 }

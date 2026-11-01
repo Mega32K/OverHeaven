@@ -15,6 +15,16 @@ final class GlProgram implements AutoCloseable {
     GlProgram(String fragment) {
         this(read("fullscreen.vsh"),read(fragment+".fsh"));
     }
+    GlProgram(String fragment,boolean fullTarget) {
+        this(read("fullscreen.vsh"),fullTarget?fullTargetSource(read(fragment+".fsh")):read(fragment+".fsh"));
+    }
+    GlProgram(String fragment,boolean fullTarget,boolean high) {
+        this(read("fullscreen.vsh"),qualitySource(fullTarget?fullTargetSource(read(fragment+".fsh")):read(fragment+".fsh"),high));
+    }
+    static String qualitySource(String source,boolean high) {
+        return source.replace("uniform int Relativistic;","const int Relativistic="+(high?1:0)+";");
+    }
+    static String fullTargetSource(String source) { return source.replace("#version 330 core","#version 330 core\n#define UNBOUNDED_TARGET 1"); }
     GlProgram(String vertexSource,String fragmentSource) {
         int vertex = 0, pixel = 0;
         try {
@@ -29,7 +39,7 @@ final class GlProgram implements AutoCloseable {
     private static String source(String file) throws java.io.IOException {
         try (var reader = Minecraft.getInstance().getResourceManager().openAsReader(new ResourceLocation(FoliageCompat.MOD_ID, "shaders/blackhole/" + file))) {
             String source = reader.lines().collect(java.util.stream.Collectors.joining("\n"));
-            for(String include:new String[]{"finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl","finale_star_style.glsl"}) {
+            for(String include:new String[]{"schwarzschild.glsl","thermal.glsl","kerr.glsl","finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl","finale_star_style.glsl","composite_light.glsl","reconstruct.glsl","solution_bounds.glsl"}) {
                 String directive="#include \""+include+"\"";
                 if(source.contains(directive)) source=source.replace(directive,source(include));
             }
@@ -46,6 +56,8 @@ final class GlProgram implements AutoCloseable {
     void integer(String name, int value) { glUniform1i(uniform(name), value); }
     void scalar(String name, double value) { glUniform1f(uniform(name), (float) value); }
     void floats(String name, float[] values) { glUniform1fv(uniform(name), values); }
+    void vector4(String name,double x,double y,double z,double w) { glUniform4f(uniform(name),(float)x,(float)y,(float)z,(float)w); }
+    void rectangle(String name,int left,int bottom,int right,int top) { glUniform4i(uniform(name),left,bottom,right,top); }
     void pair(String name, float first, float second) { glUniform2f(uniform(name), first, second); }
     void vector(String name, float first, float second, float third) { glUniform3f(uniform(name), first, second, third); }
     void matrix(String name, Matrix4f matrix) { try (var stack = MemoryStack.stackPush()) { glUniformMatrix4fv(uniform(name), false, matrix.get(stack.mallocFloat(16))); } }

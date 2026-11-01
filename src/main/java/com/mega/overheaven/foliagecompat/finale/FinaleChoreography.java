@@ -5,27 +5,23 @@ import java.util.List;
 public final class FinaleChoreography {
     private static final double[] SPEEDS={.008,.028,.12,.32,-.26,-.82,-2.1,-.025,0};
     public record Motion(double angle,double speed) { }
-    public record Cue(FinaleTimeline.Phase phase,double fraction,String sound,boolean glass,float gain) { }
+    public record Cue(FinaleTimeline.Phase phase,double fraction,String sound,float gain) { }
     public static final List<Cue> CUES=List.of(
-        new Cue(FinaleTimeline.Phase.EXPOSE,.02,"causal_charge",false,.48f),
-        new Cue(FinaleTimeline.Phase.EXPOSE,.175,"causal_fault",false,.38f),
-        new Cue(FinaleTimeline.Phase.EXPOSE,.265,"causal_fault",false,.48f),
-        new Cue(FinaleTimeline.Phase.EXPOSE,.355,"causal_fault",false,.58f),
-        new Cue(FinaleTimeline.Phase.EXPOSE,CausalTransition.RELEASE,"causal_release",false,.85f),
-        new Cue(FinaleTimeline.Phase.EXPOSE,CausalTransition.REVEALED,"causal_recoil",false,.64f),
-        new Cue(FinaleTimeline.Phase.SUMMON,.06,"pulse",false,.48f),
-        new Cue(FinaleTimeline.Phase.SUMMON,.37,"pulse",false,.62f),
-        new Cue(FinaleTimeline.Phase.SUMMON,.66,"pulse",false,.78f),
-        new Cue(FinaleTimeline.Phase.FRACTURE,.10,"crack",true,.35f),
-        new Cue(FinaleTimeline.Phase.FRACTURE,.36,"crack",true,.5f),
-        new Cue(FinaleTimeline.Phase.FRACTURE,.62,"crack",true,.66f),
-        new Cue(FinaleTimeline.Phase.FRACTURE,.80,"rupture",true,.76f),
-        new Cue(FinaleTimeline.Phase.FRACTURE,.80,"impact",false,.8f),
-        new Cue(FinaleTimeline.Phase.REVERSE,.12,"reverse",false,.65f),
-        new Cue(FinaleTimeline.Phase.REVERSE,.93,"time_break",false,.6f),
-        new Cue(FinaleTimeline.Phase.UNWEAVE,.24,"fold",false,.5f),
-        new Cue(FinaleTimeline.Phase.UNWEAVE,.58,"fold",false,.6f),
-        new Cue(FinaleTimeline.Phase.UNWEAVE,.84,"fold",false,.72f));
+        new Cue(FinaleTimeline.Phase.EXPOSE,.02,"causal_charge",.48f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,.175,"causal_fault",.38f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,.265,"causal_fault",.48f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,.355,"causal_fault",.58f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,CausalTransition.RELEASE,"causal_release",.85f),
+        new Cue(FinaleTimeline.Phase.EXPOSE,CausalTransition.REVEALED,"causal_recoil",.64f),
+        new Cue(FinaleTimeline.Phase.SUMMON,.06,"pulse",.48f),
+        new Cue(FinaleTimeline.Phase.SUMMON,.37,"pulse",.62f),
+        new Cue(FinaleTimeline.Phase.SUMMON,.66,"pulse",.78f),
+        new Cue(FinaleTimeline.Phase.FRACTURE,.80,"impact",.8f),
+        new Cue(FinaleTimeline.Phase.REVERSE,.12,"reverse",.65f),
+        new Cue(FinaleTimeline.Phase.REVERSE,.93,"time_break",.6f),
+        new Cue(FinaleTimeline.Phase.UNWEAVE,.24,"fold",.5f),
+        new Cue(FinaleTimeline.Phase.UNWEAVE,.58,"fold",.6f),
+        new Cue(FinaleTimeline.Phase.UNWEAVE,.84,"fold",.72f));
     private FinaleChoreography() { }
     public static Motion motion(FinaleTimeline timeline,double ticks) { return motion(timeline,ticks,false); }
     public static Motion starMotion(FinaleTimeline timeline,double ticks) { return motion(timeline,ticks,true); }

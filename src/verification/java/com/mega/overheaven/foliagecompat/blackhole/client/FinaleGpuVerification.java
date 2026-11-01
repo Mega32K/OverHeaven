@@ -25,7 +25,7 @@ public final class FinaleGpuVerification {
         source=Path.of(args[0]);output=Path.of(args[1]);Files.createDirectories(output);
         check(glfwInit(),"GLFW");glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);long window=glfwCreateWindow(64,64,"finale shader verification",0,0);check(window!=0,"context");glfwMakeContextCurrent(window);GL.createCapabilities();vao=glGenVertexArrays();
         String fill="#version 330 core\nin vec2 texCoord;out vec4 Color;void main(){float grid=step(.5,fract(texCoord.x*16.))*step(.5,fract(texCoord.y*9.));Color=vec4(mix(vec3(.12,.16,.2),vec3(.45,.35,.22),grid),1);}";
-        try(var stars=new GlProgram(read("fullscreen.vsh"),read("finale_stars.fsh"));var composite=new GlProgram(read("fullscreen.vsh"),read("finale_composite.fsh"));var geometry=new GlProgram(read("finale_geometry.vsh"),read("finale_geometry.fsh"));var near=new GlProgram(read("fullscreen.vsh"),read("integrate.fsh"));var normal=new GlProgram(read("fullscreen.vsh"),read("composite.fsh"));var bloom=new GlProgram(read("fullscreen.vsh"),read("bloom.fsh"));var fillProgram=new GlProgram(read("fullscreen.vsh"),fill);
+        try(var stars=new GlProgram(read("fullscreen.vsh"),read("finale_stars.fsh"));var composite=new GlProgram(read("fullscreen.vsh"),read("finale_composite.fsh"));var near=new GlProgram(read("fullscreen.vsh"),read("integrate.fsh"));var normal=new GlProgram(read("fullscreen.vsh"),read("composite.fsh"));var bloom=new GlProgram(read("fullscreen.vsh"),read("bloom.fsh"));var fillProgram=new GlProgram(read("fullscreen.vsh"),fill);
             var scene=new GlTarget(GL_RGBA16F);var sky=new GlTarget(GL_RGBA16F).linear();var result=new GlTarget(GL_RGBA16F)) {
             check(true,"all production shaders linked");GlState.fullscreen();stars.use();stars.scalar("Radius",3.2);stars.scalar("Glow",.7);stars.vector("DiskRight",1,0,0);stars.vector("DiskNormal",0,.92f,.392f);stars.vector("DiskForward",0,.392f,-.92f);scene.resize(W,H);sky.resize(W/2,H/2);result.resize(W,H);scene.bind();fillProgram.use();draw();
             StringBuilder report=new StringBuilder("GPU: "+glGetString(GL_RENDERER)+"\nSynthetic 1920x1080, 960x540 star solve, seed 7; measured star solve+composite or near solve+bloom+composite; excludes scene capture and Minecraft host\n");
@@ -45,7 +45,7 @@ public final class FinaleGpuVerification {
             }
             result.bind();composite.use();composite.scalar("Coverage",1);composite.scalar("Flash",1);composite.scalar("Pulse",1);composite.integer("Black",0);composite.texture("Scene",0,scene.textures[0]);composite.texture("Cosmos",1,sky.textures[0]);draw();double white=0;for(float value:pixels(result))white=Math.max(white,value);check(white>=.999,"final impact reaches full white");
             nearCases(near,normal,bloom,scene,result,report);
-            geometryCases(geometry,result);
+            check(!Files.exists(source.resolve("finale_geometry.vsh")) && !Files.exists(source.resolve("finale_geometry.fsh")),"retired fragment programs absent");
             sky.bind();stars.use();uniforms(stars,5,.2f,1840,new Matrix4f().rotateY((float)Math.PI).rotateX(1.2f));draw();image(sky,"backward-upward");
             int original=glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);glEnable(GL_BLEND);glViewport(3,5,13,17);try(var saved=GlState.capture()){GlState.fullscreen();scene.bind();}check(glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING)==original && glIsEnabled(GL_BLEND),"state restored");
             sky.resize(640,360);sky.bind();check(sky.width==640 && sky.height==360 && glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE,"resize valid");int old=sky.textures[0];sky.close();check(sky.framebuffer==0 && !glIsTexture(old),"release");check(glGetError()==GL_NO_ERROR,"GL clean");
@@ -82,20 +82,4 @@ public final class FinaleGpuVerification {
         }
     }
 
-    static void geometryCases(GlProgram program,GlTarget result)throws Exception {
-        int positions=glGenTextures(),shapes=glGenTextures();
-        try(var opaque=new GlTarget(GL_R32F);var surface=new GlTarget(GL_R32F)) {
-            opaque.resize(W,H);surface.resize(W,H);opaque.bind();glClearBufferfv(GL_COLOR,0,new float[]{1,0,0,0});surface.bind();glClearBufferfv(GL_COLOR,0,new float[]{1,0,0,0});
-            var centers=BufferUtils.createFloatBuffer(9*4);var boxes=BufferUtils.createFloatBuffer(9*8);
-            for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){centers.put(x*2).put(y*2).put(4).put(0);boxes.put(x*2).put(y*2).put(4).put(0).put(.5f).put(.5f).put(x==0?.0625f:.5f).put(0);}centers.flip();boxes.flip();
-            glBindTexture(GL_TEXTURE_2D,positions);glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,9,1,0,GL_RGBA,GL_FLOAT,centers);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
-            glBindTexture(GL_TEXTURE_2D,shapes);glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,2,9,0,GL_RGBA,GL_FLOAT,boxes);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
-            for(int mode=0;mode<2;mode++) {
-                result.bind();GlState.fullscreen();glClearBufferfv(GL_COLOR,0,new float[]{0,0,0,1});program.use();uniforms(program,2,mode==0?.72f:.95f,800,new Matrix4f());
-                program.integer("Mode",mode);program.integer("GlassCount",9);program.integer("GlassFragments",27);program.scalar("Visibility",1);program.pair("ScreenSize",W,H);
-                program.texture("Positions",0,positions);program.texture("Shapes",1,shapes);program.texture("OpaqueDepth",8,opaque.textures[0]);program.texture("SurfaceDepth",9,surface.textures[0]);
-                glBindVertexArray(vao);glDrawArraysInstanced(GL_TRIANGLES,0,mode==0?36:6,mode==0?9:27);float[] data=pixels(result);double sum=0;for(int i=0;i<data.length;i+=4)sum+=data[i]+data[i+1]+data[i+2];check(sum>0,"instanced glass emission "+mode);image(result,mode==0?"glass-cracks":"glass-fragments");
-            }
-        } finally {glDeleteTextures(positions);glDeleteTextures(shapes);}
-    }
 }
