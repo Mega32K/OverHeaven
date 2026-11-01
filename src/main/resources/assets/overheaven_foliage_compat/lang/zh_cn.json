@@ -1,4 +1,5 @@
 {
+  "item.overheaven_foliage_compat.seawater_filter": "海水过滤器",
   "item.overheaven_foliage_compat.playing_card_2": "扑克牌 2",
   "item.overheaven_foliage_compat.playing_card_3": "扑克牌 3",
   "item.overheaven_foliage_compat.playing_card_4": "扑克牌 4",
@@ -11,5 +12,19 @@
   "item.overheaven_foliage_compat.playing_card_j": "扑克牌 J",
   "item.overheaven_foliage_compat.playing_card_q": "扑克牌 Q",
   "item.overheaven_foliage_compat.playing_card_k": "扑克牌 K",
-  "item.overheaven_foliage_compat.playing_card_a": "扑克牌 A"
+  "item.overheaven_foliage_compat.playing_card_a": "扑克牌 A",
+  "block.overheaven_foliage_compat.oak_shelf": "橡木展示架",
+  "block.overheaven_foliage_compat.spruce_shelf": "云杉木展示架",
+  "block.overheaven_foliage_compat.birch_shelf": "白桦木展示架",
+  "block.overheaven_foliage_compat.jungle_shelf": "丛林木展示架",
+  "block.overheaven_foliage_compat.acacia_shelf": "金合欢木展示架",
+  "block.overheaven_foliage_compat.dark_oak_shelf": "深色橡木展示架",
+  "block.overheaven_foliage_compat.mangrove_shelf": "红树木展示架",
+  "block.overheaven_foliage_compat.cherry_shelf": "樱花木展示架",
+  "block.overheaven_foliage_compat.bamboo_shelf": "竹展示架",
+  "block.overheaven_foliage_compat.crimson_shelf": "绯红木展示架",
+  "block.overheaven_foliage_compat.warped_shelf": "诡异木展示架",
+  "block.overheaven_foliage_compat.naidan": "奶蛋",
+  "subtitles.overheaven_foliage_compat.naidan.andi": "奶蛋：安迪",
+  "subtitles.overheaven_foliage_compat.naidan.laugh": "奶蛋：大笑"
 }

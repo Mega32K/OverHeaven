@@ -70,6 +70,12 @@ public final class FinaleVerification {
         check(packet.glass()[0]==4,"input arrays detached");
         var buffer=new FriendlyByteBuf(Unpooled.buffer()); packet.encode(buffer); var decoded=FinaleNetwork.Update.decode(buffer); buffer.release();
         check(decoded.run().equals(packet.run()) && decoded.hole().equals(hole) && decoded.paused() && decoded.elapsed()==800 && Arrays.equals(decoded.glass(),packet.glass()),"latejoin full snapshot roundtrip");
+        var stripped=decoded.withoutFragments();
+        check(stripped.glass().length==0 && stripped.debris().length==0,"legacy fragment lists discarded before client state");
+        check(stripped.run().equals(decoded.run()) && stripped.hole().equals(decoded.hole()) && stripped.timeline().equals(decoded.timeline()) && stripped.elapsed()==decoded.elapsed() && stripped.paused()==decoded.paused() && stripped.preparing()==decoded.preparing() && stripped.stopping()==decoded.stopping() && stripped.serverTick()==decoded.serverTick(),"sanitizing old fragments preserves every playback field");
+        check(stripped.withoutFragments()==stripped,"new empty snapshots need no extra copy");
+        buffer=new FriendlyByteBuf(Unpooled.buffer()); stripped.encode(buffer); var emptyDecoded=FinaleNetwork.Update.decode(buffer); buffer.release();
+        check(emptyDecoded.glass().length==0 && emptyDecoded.debris().length==0,"empty arrays retain existing wire format");
         var clear=FinaleNetwork.Update.clear("minecraft:the_nether",1000); buffer=new FriendlyByteBuf(Unpooled.buffer()); clear.encode(buffer); check(FinaleNetwork.Update.decode(buffer).hole()==null,"dimension clear"); buffer.release();
         rejects(()->new FinaleNetwork.Update("minecraft:the_nether",packet.run(),hole,timeline,0,false,false,-1,1,new long[0],new long[0]));
         rejects(()->new FinaleNetwork.Update(hole.dimension(),packet.run(),hole,timeline,0,false,false,-1,1,new long[1025],new long[0]));
@@ -131,6 +137,20 @@ public final class FinaleVerification {
         for(var instruction:release.instructions) if(instruction instanceof FieldInsnNode field) { releasesSubjects|=field.name.equals("subjects"); releasesCosmos|=field.name.equals("cosmicScene"); }
         check(releasesSubjects && releasesCosmos,"finale lifetime owns cosmic solver and target");
         var client=node("com/mega/overheaven/foliagecompat/blackhole/client/FinaleClient.class");
+        check(client.fields.stream().noneMatch(f->f.name.equals("debris") || f.name.equals("glass")),"client has no fragment storage");
+        check(finale.fields.stream().noneMatch(f->f.desc.contains("FinaleGeometry")),"renderer has no fragment resources");
+        var accept=client.methods.stream().filter(m->m.name.equals("accept")).findFirst().orElseThrow();
+        boolean strips=false;
+        for(var instruction:accept.instructions) if(instruction instanceof MethodInsnNode call) strips|=call.name.equals("withoutFragments");
+        check(strips,"legacy snapshots sanitized at production client boundary");
+        var manager=node("com/mega/overheaven/foliagecompat/finale/FinaleManager.class");
+        check(manager.methods.stream().noneMatch(m->m.name.equals("prepare")),"no scene-scanning preparation stage");
+        var run=node("com/mega/overheaven/foliagecompat/finale/FinaleManager$Run.class");
+        check(run.fields.stream().noneMatch(f->Set.of("scan","glass","debris","preparing").contains(f.name)),"new shows have no fragment candidates or scan wait");
+        for(var method:manager.methods) if(!method.name.equals("write") && !method.name.equals("recover"))
+            for(var instruction:method.instructions) if(instruction instanceof MethodInsnNode call)
+                check(!call.name.equals("setBlock") && !call.name.equals("removeBlock"),"only legacy recovery can mutate the scene");
+        check(manager.methods.stream().anyMatch(m->m.name.equals("recover")) && manager.methods.stream().anyMatch(m->m.name.equals("locked")),"historical restoration and reservations retained");
         var camera=client.methods.stream().filter(method->method.name.equals("camera")).findFirst().orElseThrow();
         check(camera.desc.equals("(Lnet/minecraftforge/client/event/ViewportEvent$ComputeCameraAngles;)V"),"verified Forge camera event descriptor");
         int angleWrites=0;

@@ -15,7 +15,6 @@ public final class FinaleRenderer implements AutoCloseable {
     private final Vector4f eye=new Vector4f();
     private final GlTarget scene=new GlTarget(GL_RGBA16F),stars=new GlTarget(GL_RGBA16F).linear(),cosmicScene=new GlTarget(GL_RGBA16F);
     private final BlackHoleRenderer subjects=new BlackHoleRenderer(true);
-    private final FinaleGeometry geometry=new FinaleGeometry();
     private final GpuDiagnostics timing=new GpuDiagnostics();
     private final FinaleStarMap sky=new FinaleStarMap(name -> Minecraft.getInstance().getResourceManager().open(new net.minecraft.resources.ResourceLocation(com.mega.overheaven.foliagecompat.FoliageCompat.MOD_ID,"textures/finale/"+name)));
     private GlProgram compose;
@@ -32,13 +31,8 @@ public final class FinaleRenderer implements AutoCloseable {
         projectionScale=Math.max(0.001f,Math.abs(projection.m11()));
         var position=camera.getPosition(); cameraX=position.x; cameraY=position.y; cameraZ=position.z; cameraValid=Float.isFinite(eye.x);
     }
-    public void geometryChanged() { geometry.dirty(); }
     public void prepareSky() { sky.prepare(); }
     public void warmSky() { sky.warm(); }
-    void nearGeometry(int opaque,int surface,int width,int height,float partial) {
-        if(!FinaleClient.active() || !cameraValid) return;
-        geometry.render(vp,inverse,eye,cameraX,cameraY,cameraZ,opaque,surface,width,height,partial);
-    }
     static double nearAmount(String id,float partial) {
         if(!FinaleClient.source(id)) return 0;
         var frame=FinaleClient.frame(partial); double amount=1;
@@ -61,35 +55,46 @@ public final class FinaleRenderer implements AutoCloseable {
     }
     public void render(float partial) {
         if(!FinaleClient.active() || !cameraValid || FinaleClient.coverage(partial)<=0 && FinaleClient.flash(partial)<=0 && FinaleClient.feedback().exposure<=0 && FinaleClient.feedback().chroma<=0 && CausalUniforms.exposure(partial)<=0 && CausalUniforms.impact(partial)<=0) return;
-        var mc=Minecraft.getInstance(); var target=mc.getMainRenderTarget();
+        var mc=Minecraft.getInstance(); var target=mc.getMainRenderTarget();long submitStart=System.nanoTime();
         try(var state=GlState.capture()) {
+            int width=target.width,height=target.height;
+            timing.frame(BlackHoleClient.diagnostics,true,"finale/"+sky.path()+"/"+FinaleClient.frame(partial).phase().id(),width,height);
+            sky.reportPreparation(timing);
+            timing.start("finale-total");long prepareCpu=System.nanoTime();
             if(compose==null) { compose=new GlProgram("finale_composite"); vao=glGenVertexArrays(); }
-            int width=target.width,height=target.height; scene.resize(width,height);
-            timing.frame(BlackHoleClient.diagnostics,true,"finale/"+sky.path()+"/"+FinaleClient.frame(partial).phase().id(),width,height); timing.start(0);
+            timing.cpu("programs",(System.nanoTime()-prepareCpu)/1e6);
+            if(FinaleClient.stopping(partial)<0 && FinaleTimeline.black(FinaleClient.frame(partial))) {
+                GlState.fullscreen();glBindFramebuffer(GL_FRAMEBUFFER,target.frameBufferId);glViewport(0,0,width,height);
+                compose.use();compose.integer("Black",1);glBindVertexArray(vao);glDrawArrays(GL_TRIANGLES,0,3);
+                timing.metrics(0,0,scene.bytes()+cosmicScene.bytes()+stars.bytes());return;
+            }
+            prepareCpu=System.nanoTime();scene.resize(width,height);timing.cpu("targets",(System.nanoTime()-prepareCpu)/1e6);
+            timing.start("scene-capture");
             GlState.fullscreen(); glBindFramebuffer(GL_READ_FRAMEBUFFER,target.frameBufferId); glBindFramebuffer(GL_DRAW_FRAMEBUFFER,scene.framebuffer);
             glBlitFramebuffer(0,0,width,height,0,0,width,height,GL_COLOR_BUFFER_BIT,GL_NEAREST);
-            glBindVertexArray(vao);
+            glBindVertexArray(vao);timing.end("scene-capture");
             if(FinaleClient.coverage(partial)>0) {
+                timing.start("starfield");
                 exposure.evaluate(FinaleClient.state().timeline(),FinaleClient.ticks(partial),BlackHoleClient.steps==24?0:BlackHoleClient.steps==96?2:1);
-                stars.resize(Math.max(1,(int)(width*BlackHoleClient.resolution)),Math.max(1,(int)(height*BlackHoleClient.resolution)));
-                cosmicScene.resize(width,height); stars.bind();
-                boolean nasa=sky.drawBackground(p->uniforms(p,partial),vao);
+                prepareCpu=System.nanoTime();stars.resize(Math.max(1,(int)(width*BlackHoleClient.resolution)),Math.max(1,(int)(height*BlackHoleClient.resolution)));
+                cosmicScene.resize(width,height);timing.cpu("targets",(System.nanoTime()-prepareCpu)/1e6); stars.bind();
+                boolean nasa=sky.drawBackground(p->uniforms(p,partial),vao);sky.reportPreparation(timing);
                 glBindFramebuffer(GL_READ_FRAMEBUFFER,stars.framebuffer); glBindFramebuffer(GL_DRAW_FRAMEBUFFER,cosmicScene.framebuffer);
                 glBlitFramebuffer(0,0,stars.width,stars.height,0,0,width,height,GL_COLOR_BUFFER_BIT,GL_LINEAR);
                 if(nasa) { cosmicScene.bind(); sky.drawStars(p->uniforms(p,partial),width,height,BlackHoleClient.steps==24?0:BlackHoleClient.steps==96?2:1); }
-                timing.end(0);
+                timing.end("starfield");
                 var frame=FinaleClient.frame(partial);
                 if(!FinaleTimeline.black(frame) && frame.phase()!=FinaleTimeline.Phase.RETURN) subjects.renderCosmos(cosmicScene,vp,eye,cameraX,cameraY,cameraZ,2.0f/(height*projectionScale),partial);
             }
-            timing.end(0);
-            timing.start(1); glBindFramebuffer(GL_FRAMEBUFFER,target.frameBufferId); glViewport(0,0,width,height); compose.use(); uniforms(compose,partial);
+            timing.start("late-compose"); glBindFramebuffer(GL_FRAMEBUFFER,target.frameBufferId); glViewport(0,0,width,height); compose.use(); uniforms(compose,partial);
             compose.texture("Scene",0,scene.textures[0]); compose.texture("Cosmos",1,FinaleClient.coverage(partial)>0?cosmicScene.textures[0]:scene.textures[0]);
             compose.pair("FullSize",width,height); compose.scalar("CameraExposure",Math.max(FinaleClient.feedback().exposure,CausalUniforms.exposure(partial))); compose.scalar("CameraChroma",FinaleClient.feedback().chroma);
             CausalUniforms.impactUniforms(compose,partial);
             compose.scalar("Flash",FinaleClient.flash(partial)); compose.scalar("Pulse",FinaleClient.pulse(partial));
-            glBindVertexArray(vao); glDrawArrays(GL_TRIANGLES,0,3); timing.end(1);
+            glBindVertexArray(vao); glDrawArrays(GL_TRIANGLES,0,3); timing.end("late-compose");
+            timing.metrics(0,(long)width*height,scene.bytes()+cosmicScene.bytes()+stars.bytes());
         } catch(RuntimeException error) { FinaleClient.fail(error); }
-        finally { timing.end(0); timing.end(1); }
+        finally { timing.end("scene-capture");timing.end("starfield");timing.end("late-compose");timing.end("finale-total");timing.cpu("finale-with-state",(System.nanoTime()-submitStart)/1e6); }
     }
     private void uniforms(GlProgram p,float partial) {
         var state=FinaleClient.state(); var frame=FinaleClient.frame(partial);
@@ -109,7 +114,7 @@ public final class FinaleRenderer implements AutoCloseable {
         p.integer("Black",FinaleClient.stopping(partial)<0 && FinaleTimeline.black(frame)?1:0); p.integer("Detail",BlackHoleClient.steps==24?0:BlackHoleClient.steps==96?2:1);
     }
     @Override public void close() {
-        try(var state=GlState.capture()) { subjects.close(); cosmicScene.close(); scene.close(); stars.close(); geometry.close(); sky.close(); if(compose!=null) compose.close(); compose=null; if(vao!=0) glDeleteVertexArrays(vao); vao=0; timing.close(); }
+        try(var state=GlState.capture()) { subjects.close(); cosmicScene.close(); scene.close(); stars.close(); sky.close(); if(compose!=null) compose.close(); compose=null; if(vao!=0) glDeleteVertexArrays(vao); vao=0; timing.close(); }
         cameraValid=false;exposure.clear();
     }
 }

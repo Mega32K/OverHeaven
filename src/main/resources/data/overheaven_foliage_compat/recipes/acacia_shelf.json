@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "overheaven_foliage_compat:shelves",
+  "key": {
+    "#": {
+      "item": "minecraft:stripped_acacia_log"
+    }
+  },
+  "pattern": [
+    "###",
+    "   ",
+    "###"
+  ],
+  "result": {
+    "item": "overheaven_foliage_compat:acacia_shelf",
+    "count": 6
+  }
+}

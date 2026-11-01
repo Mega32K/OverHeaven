@@ -1,0 +1,7 @@
+{
+  "parent": "overheaven_foliage_compat:block/template_shelf_body",
+  "textures": {
+    "all": "overheaven_foliage_compat:block/birch_shelf",
+    "particle": "minecraft:block/stripped_birch_log"
+  }
+}

@@ -10,7 +10,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.BufferUtils;
 
-/** A/B production GLSL, every phase, actual shard draws and equal-work GPU timers. */
+/** A/B production GLSL, every phase and retired-fragment absence. Historical fixture timings only. */
 public final class FinaleReimaginedGpuVerification {
     private static final FinaleTimeline TIMELINE=FinaleTimeline.defaults();
     private static final StringBuilder REPORT=new StringBuilder();
@@ -21,9 +21,12 @@ public final class FinaleReimaginedGpuVerification {
         source=Path.of(args[0]); output=Path.of(args[1]); Files.createDirectories(output);
         Path before=Path.of(args[2]),pack=Path.of(args[3]);
         String previous=Files.readString(before.resolve("field.glsl")).replace("\r\n","\n"),current=Files.readString(source.resolve("field.glsl")).replace("\r\n","\n");
-        expect(section(previous,"float finaleRadius()","Field finaleField").equals(section(current,"float finaleRadius()","#include \"finale_energy.glsl\"")),"singularity radius, fade, film palette, porous veil and center bubbles preserved verbatim");
-        expect(section(previous,"    float closest=-dot(origin,direction),impact=","    if(FinalePhase==0)").equals(section(current,"    float closest=-dot(origin,direction),impact=","    vec2 bounds=sphere(origin,direction,Outer*1.35")),"singularity focus, corona and pulse preserved verbatim");
-        expect(previous.substring(0,previous.indexOf("float finaleRadius()")).equals(current.substring(0,current.indexOf("float finaleRadius()"))),"ordinary black-hole field, lens and material unchanged");
+        if(previous.contains("#include \"finale_energy.glsl\"")) {
+            expect(section(previous,"float finaleRadius()","#include \"finale_energy.glsl\"").equals(section(current,"float finaleRadius()","#include \"finale_energy.glsl\"")),"current-baseline singularity radius, fade, membranes and palette unchanged");
+            expect(section(previous,"Field finaleField","Field integrate").equals(section(current,"Field finaleField","Field integrate")),"current-baseline singularity source and capture unchanged");
+        }
+        // Ordinary disk art can change independently. Lens mapping remains a preservation contract.
+        expect(section(previous,"vec3 environmentLens(","struct Field").equals(section(current,"vec3 environmentLens(","struct Field")),"environment lens unchanged");
         expect(glfwInit(),"GLFW initialized"); glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE); glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3); glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
         long window=glfwCreateWindow(64,64,"finale reimagined verification",0,0); expect(window!=0,"hidden context"); glfwMakeContextCurrent(window); GL.createCapabilities(); vao=glGenVertexArrays();
         REPORT.append("GPU: ").append(glGetString(GL_RENDERER)).append("; 1920x1080 output, balanced half-resolution solve; synthetic fixture, no Minecraft or host postprocessing\n");
@@ -39,7 +42,7 @@ public final class FinaleReimaginedGpuVerification {
                 }
                 if(TIMELINE.black(TIMELINE.frame(ticks))) expect(energy(pixels(now.result))==0,"exact blackout at "+seconds[index]);
             }
-            REPORT.append("Per-phase median GPU ms, five alternating batches of 16 frames after 200 warmup draws, identical fixture/camera/source parameters:\n");
+            REPORT.append("Historical generic-orchestration fixture only, not current production performance. Per-phase median GPU ms, five alternating batches of 16 frames after 200 warmup draws:\n");
             for(double secondsAt:new double[]{3,16.5,37.8,51.5,75.5,96,110.5,118}) {
                 double[] costs=new double[2]; double[][] batches=new double[2][5];
                 for(int warm=0;warm<100;warm++) { render(old,fill,secondsAt*20); render(now,fill,secondsAt*20); }
@@ -65,9 +68,9 @@ public final class FinaleReimaginedGpuVerification {
                 if(direction==1)view.rotateY((float)Math.PI); if(direction==2)view.rotateX(-1.55f); if(direction==3)distance=-1;
                 now.cosmos(1510,view,0,distance,false); expect(energy(pixels(now.cosmos))>0,"background and source survive real-view case "+direction); image(now.cosmos,"view-"+direction);
             }
-            glass(now);
+            expect(!Files.exists(source.resolve("finale_geometry.vsh")) && !Files.exists(source.resolve("finale_geometry.fsh")),"retired fragment resources absent");
             if(args.length>4) preview(now,fill,args[4]);
-            expect(glGetError()==GL_NO_ERROR,"GL error-free after all phases and geometry");
+            expect(glGetError()==GL_NO_ERROR,"GL error-free after all phases");
         } finally { glDeleteVertexArrays(vao); glfwDestroyWindow(window); glfwTerminate(); }
         REPORT.append("Checks passed: ").append(checks).append("\nScreenshots are GPU fixtures, not game captures. No packaged artifact created.\n");
         Files.writeString(output.resolve("report.txt"),REPORT); System.out.println(REPORT);
@@ -91,28 +94,5 @@ public final class FinaleReimaginedGpuVerification {
             if(!process.waitFor(60,java.util.concurrent.TimeUnit.SECONDS)) { process.destroyForcibly(); throw new IllegalStateException("preview encoder timeout"); }
         }
         expect(process.exitValue()==0 && Files.size(movie)>0,"30-second muted 4x timeline preview encoded from production GLSL");
-    }
-    private static int texture(int width,int height,float[] values) {
-        int id=glGenTextures(); glBindTexture(GL_TEXTURE_2D,id); var data=BufferUtils.createFloatBuffer(values.length); data.put(values).flip();
-        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,width,height,0,GL_RGBA,GL_FLOAT,data); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST); return id;
-    }
-    private static void glass(FinaleFlashGpuVerification.Pipeline pipeline) throws Exception {
-        int count=36; float[] points=new float[count*4],boxes=new float[count*8];
-        for(int i=0;i<count;i++) { float x=(i%6-2.5f)*1.1f,y=(i/6-2.5f)*1.1f; points[i*4]=boxes[i*8]=x; points[i*4+1]=boxes[i*8+1]=y; points[i*4+2]=boxes[i*8+2]=8; boxes[i*8+4]=boxes[i*8+5]=.5f; boxes[i*8+6]=.05f; }
-        int positions=texture(count,1,points),shapes=texture(2,count,boxes);
-        try(var program=new GlProgram(read("finale_geometry.vsh"),read("finale_geometry.fsh"));var target=new GlTarget(GL_RGBA16F,GL_RGBA16F,GL_RGBA32F)) {
-            target.resize(W,H); pipeline.depth(1);
-            for(int stage=0;stage<4;stage++) {
-                target.bind(); for(int i=0;i<3;i++)glClearBufferfv(GL_COLOR,i,new float[4]);
-                program.use(); uniforms(program,stage<2?2:3,stage==0?.73f:stage==1?.86f:stage==2?.32f:.70f,stage<2?775:1010,new Matrix4f());
-                program.scalar("Visibility",1); program.pair("ScreenSize",W,H); program.integer("GlassCount",count); program.integer("GlassFragments",count*3); program.integer("Mode",stage==0?0:1);
-                program.texture("Positions",0,positions); program.texture("Shapes",1,shapes); program.texture("OpaqueDepth",8,pipeline.opaque.textures[1]); program.texture("SurfaceDepth",9,pipeline.surface.textures[1]);
-                glBindVertexArray(vao); glDrawArraysInstanced(GL_TRIANGLES,0,stage==0?36:6,stage==0?count:count*3);
-                double visible=energy(pixels(target)); expect(visible>0,"real geometry rasterization stage="+stage); image(target,"glass-"+stage);
-                var frozen=pixels(target); glDrawArraysInstanced(GL_TRIANGLES,0,stage==0?36:6,stage==0?count:count*3); expect(Arrays.equals(frozen,pixels(target)),"frozen geometry deterministic "+stage);
-                pipeline.depth(.9f); target.bind(); for(int i=0;i<3;i++)glClearBufferfv(GL_COLOR,i,new float[4]); program.use(); glDrawArraysInstanced(GL_TRIANGLES,0,stage==0?36:6,stage==0?count:count*3);
-                expect(energy(pixels(target))==0,"foreground depth blocks cracks/shards "+stage); pipeline.depth(1);
-            }
-        } finally { glDeleteTextures(positions); glDeleteTextures(shapes); }
     }
 }

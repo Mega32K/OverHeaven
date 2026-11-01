@@ -1,0 +1,74 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "facing": "north"
+      },
+      "apply": {
+        "model": "overheaven_foliage_compat:block/cherry_shelf"
+      }
+    },
+    {
+      "when": {
+        "facing": "north"
+      },
+      "apply": {
+        "model": "overheaven_foliage_compat:block/cherry_shelf_unpowered"
+      }
+    },
+    {
+      "when": {
+        "facing": "east"
+      },
+      "apply": {
+        "model": "overheaven_foliage_compat:block/cherry_shelf",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east"
+      },
+      "apply": {
+        "model": "overheaven_foliage_compat:block/cherry_shelf_unpowered",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south"
+      },
+      "apply": {
+        "model": "overheaven_foliage_compat:block/cherry_shelf",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south"
+      },
+      "apply": {
+        "model": "overheaven_foliage_compat:block/cherry_shelf_unpowered",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west"
+      },
+      "apply": {
+        "model": "overheaven_foliage_compat:block/cherry_shelf",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west"
+      },
+      "apply": {
+        "model": "overheaven_foliage_compat:block/cherry_shelf_unpowered",
+        "y": 270
+      }
+    }
+  ]
+}

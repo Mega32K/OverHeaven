@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "overheaven_foliage_compat:shelves",
+  "key": {
+    "#": {
+      "item": "minecraft:stripped_jungle_log"
+    }
+  },
+  "pattern": [
+    "###",
+    "   ",
+    "###"
+  ],
+  "result": {
+    "item": "overheaven_foliage_compat:jungle_shelf",
+    "count": 6
+  }
+}

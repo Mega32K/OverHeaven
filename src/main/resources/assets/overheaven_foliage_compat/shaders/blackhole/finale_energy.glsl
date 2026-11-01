@@ -107,8 +107,9 @@ vec4 energySpectrum(vec3 direction,float opaque) {
     if(base.w<=.00001 || shift.w<=.00001 || any(isnan(shift)) || any(isinf(shift))) return vec4(0,0,0,-1);
     vec2 uvShift=(shift.xy/shift.w-base.xy/base.w)*.5;
     // Up to 80 pixels per channel at 1080p, with a pixel-isotropic cap at every FOV.
-    vec2 pixels=uvShift*vec2(textureSize(OpaqueDepth,0));
-    float limit=80.*float(textureSize(OpaqueDepth,0).y)/1080.;
+    vec2 size=SceneSize.x>0.?SceneSize:vec2(textureSize(OpaqueDepth,0));
+    vec2 pixels=uvShift*size;
+    float limit=80.*size.y/1080.;
     uvShift*=min(1.,limit/max(length(pixels),.0001));
     return vec4(uvShift,strength,guard);
 }

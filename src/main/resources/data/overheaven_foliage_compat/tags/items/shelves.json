@@ -1,0 +1,16 @@
+{
+  "replace": false,
+  "values": [
+    "overheaven_foliage_compat:oak_shelf",
+    "overheaven_foliage_compat:spruce_shelf",
+    "overheaven_foliage_compat:birch_shelf",
+    "overheaven_foliage_compat:jungle_shelf",
+    "overheaven_foliage_compat:acacia_shelf",
+    "overheaven_foliage_compat:dark_oak_shelf",
+    "overheaven_foliage_compat:mangrove_shelf",
+    "overheaven_foliage_compat:cherry_shelf",
+    "overheaven_foliage_compat:bamboo_shelf",
+    "overheaven_foliage_compat:crimson_shelf",
+    "overheaven_foliage_compat:warped_shelf"
+  ]
+}

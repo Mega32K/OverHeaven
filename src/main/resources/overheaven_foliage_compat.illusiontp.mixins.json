@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.mega.overheaven.foliagecompat.illusiontp.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "overheaven_foliage_compat.refmap.json",
+  "mixins": [
+    "EntityMovementMixin",
+    "ServerMovementMixin"
+  ],
+  "client": [
+    "GameRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -8,13 +8,13 @@ parser.add_argument('--report',type=Path,default=root/'audit/finale-reimagined-2
 args=parser.parse_args()
 folder=root/'src/main/resources/assets/overheaven_foliage_compat/sounds/finale'
 catalog=json.loads((folder.parents[1]/'sounds.json').read_text(encoding='utf-8'))
-expected={'hum','pressure','grain','tail','ignite','pulse','crack','rupture','impact','reverse','time_break','fold'}
+expected={'hum','pressure','grain','tail','ignite','pulse','impact','reverse','time_break','fold','causal_charge','causal_fault','causal_release','causal_recoil'}
 assert {p.stem for p in folder.glob('*.ogg')}==expected
 results=[]
 for file in sorted(folder.glob('*.ogg')):
     raw=file.read_bytes(); header=raw.index(b'\x01vorbis'); channels=raw[header+11]
     rate=struct.unpack_from('<I',raw,header+12)[0]
-    assert rate==32000 and channels==(1 if file.stem in ('crack','rupture') else 2),(file,channels,rate)
+    assert rate==32000 and channels==2,(file,channels,rate)
     assert catalog['finale.'+file.stem]['sounds'][0]['name'].endswith('finale/'+file.stem)
     data=subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-i',str(file),'-f','f32le','-ar','32000','-'],capture_output=True,check=True).stdout
     values=array.array('f');values.frombytes(data)
@@ -30,4 +30,4 @@ for file in sorted(folder.glob('*.ogg')):
     results.append(result)
 args.report.parent.mkdir(parents=True,exist_ok=True)
 args.report.write_text(json.dumps(results,indent=2),encoding='utf-8')
-print('12 original OGG assets decoded; catalog, stereo/positional channels, headroom and loop boundaries passed:',args.report)
+print(len(results),'original OGG assets decoded; catalog, stereo channels, headroom and loop boundaries passed:',args.report)

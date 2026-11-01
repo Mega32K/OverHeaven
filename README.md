@@ -4,6 +4,16 @@ Minecraft Forge 1.20.1 模组，包含 SWAY / MC2 Interactive Foliage 植物兼�
 
 源码仓库：https://github.com/Mega32K/OverHeaven-Mod
 
+## 展示架
+
+加入 11 种 1.20.1 已有木材的展示架，外观取自 1.21.9 的未供电样式。可在“功能方块”创造标签页找到，也可用六个对应的去皮原木、菌柄或竹块按上下两行合成六个。注册名例如 `overheaven_foliage_compat:oak_shelf`。
+
+正面左、中、右各有一个槽位；不潜行时右键，用主手整组交换，空手取出。潜行可正常放置方块，侧面和背面不交换。支持含水、存档和方块实体同步；破坏时内容单独掉落，活塞不能推动。创造模式向空槽放入时保留主手副本。
+
+本移植不包含苍白橡木、红石快捷栏联动、漏斗/管道存取或比较器输出。展示物品采用 1.20.1 `FIXED` 模型变换；特殊物品和模组自定义模型不保证与新版 `on_shelf` 效果相同。客户端渲染与公共存储代码分离。
+
+仅编译可运行 `gradlew.bat compileJava processResources`；独立存储/交互验证为 `gradlew.bat verifyShelves`，资源检查为 `python tools/verify-shelves.py`。这些命令不打包，也不能代替真实游戏中的同步、含水和光影验收。
+
 2026-10-29：七道冲击波在上一版基础上再提速 3 倍；末段星空最终角速度为原来的 4 倍，前四分之一阶段完成提速。星空退场采用参考 dissolve_2d 的方向噪声阈值溶解，保留存活区域的亮度与主体分层。[参数与验证说明](docs/冲击波与星空溶解-2026-10-29.md)。
 
 2026-10-29：演出星空增加解析长曝光：星点逐渐拉出弯曲光轨，银河保持 85% 清晰主体与 15% 短曝光，尾迹随噪声溶解并在末段收短。独立于主体渲染，不保存历史画面。[参数、预览与验证](docs/星空延时摄影-2026-10-29.md)。
@@ -64,6 +74,7 @@ $env:JAVA_HOME = 'C:\Users\Administrator\.jdks\ms-17.0.18'
 | Interactive Foliage | 2.2.0-forge+1.20.1 | `M4DdktEm` | `implementation fg.deobf(...)` |
 | Oculus | 1.20.1-1.8.0 | `iQ1SwGc3` | `implementation fg.deobf(...)` |
 | Embeddium | 0.3.31+mc1.20.1 | `UTbfe5d1` | `runtimeOnly fg.deobf(...)`，满足 Oculus 开发运行依赖 |
+| GeckoLib | Forge 1.20.1 / 4.7 | `LwI6czff` | `implementation fg.deobf(...)`，奶蛋方块必需前置，两端安装 |
 
 构建无需本机游戏实例或手动准备依赖 JAR；首次构建需要联网下载，缓存完整后可使用 `--offline`。已移除实例目录扫描及本地 JAR 路径参数。字节码验证通过独立 Gradle configuration 获取相同远程坐标的原始工件，开发编译/运行使用 FG 重映射后的工件。标准 `implementation`/`runtimeOnly` 声明不会将第三方模组打入本模组 JAR。
 
@@ -82,3 +93,11 @@ $env:JAVA_HOME = 'C:\Users\Administrator\.jdks\ms-17.0.18'
 ```
 
 完整调用流程、缓存时机、根因证据与验收矩阵见 [调查记录](docs/INVESTIGATION.md) 和 [验证记录](docs/VALIDATION.md)。原 MDK 文件副本、反编译资料和本地构建日志保存在被 Git 忽略的 `audit/` 中。工作区最初没有 Git 仓库，本次未创建提交、分支或推送。
+
+## 奶蛋方块
+
+`/give @s overheaven_foliage_compat:naidan`，也可在“功能方块”创造分类取得。放置后面朝玩家；右键播放一次 `andi`，普通左键播放 `laugh`。大笑按原速循环到约 11.21 秒的音效结束，期间不能重复触发或切换动画，结束后恢复普通表情。潜行左键可正常拆除。
+
+服务端决定播放锁与结束时刻，使用 GeckoLib 4.7 自带动画包同步给正在追踪方块的客户端；音效从方块位置播放。andi 锁定 28 tick，大笑锁定 225 tick，低 TPS 时随游戏 tick 延长。离开追踪范围再回来不会补播已经开始的演出，服务端播放锁仍然有效。
+
+编辑工程在 `art/naidan/naidan.bbmodel`；完整 GeckoLib 几何导出至 `art/naidan/naidan-full.geo.json`，动画导出至 `art/naidan/naidan.animation.json` 后，运行 `python tools/export-naidan.py` 更新游戏模型、贴图、静态物品模型和动画。导出脚本将 pre/post 表情跳变转换为 GeckoLib 4.7 可读取的关键帧，原编辑动画保持不变。音效来自用户提供的 andi.ogg、laugh.ogg，游戏资源为单声道 Vorbis。

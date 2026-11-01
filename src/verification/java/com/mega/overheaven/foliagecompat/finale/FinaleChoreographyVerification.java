@@ -60,10 +60,11 @@ public final class FinaleChoreographyVerification {
         var ids=new HashSet<String>();
         for(var cue:FinaleChoreography.CUES) {
             check(cue.fraction()>0 && cue.fraction()<1 && cue.gain()>0 && cue.gain()<=1,"valid cue "+cue.sound());
-            check(ids.add(cue.phase().id()+":"+cue.fraction()+":"+cue.sound()),"cue identity allows simultaneous glass and global impact");
+            check(ids.add(cue.phase().id()+":"+cue.fraction()+":"+cue.sound()),"cue identity unique");
             check(Files.exists(Path.of("src/main/resources/assets/overheaven_foliage_compat/sounds/finale",cue.sound()+".ogg")),"cue sound asset exists");
         }
-        long impact=FinaleChoreography.CUES.stream().filter(cue->cue.phase()==FinaleTimeline.Phase.FRACTURE && cue.fraction()==.8 && !cue.glass()).count();
+        check(FinaleChoreography.CUES.stream().noneMatch(cue->cue.sound().equals("crack") || cue.sound().equals("rupture")),"no glass sound triggers");
+        long impact=FinaleChoreography.CUES.stream().filter(cue->cue.phase()==FinaleTimeline.Phase.FRACTURE && cue.fraction()==.8 && cue.sound().equals("impact")).count();
         check(impact==1,"no-glass show still has exactly one final energy impact");
         for(double progress:new double[]{.625,.8,1}) for(int layer=0;layer<4;layer++) check(FinaleChoreography.stem(layer,new FinaleTimeline.Frame(FinaleTimeline.Phase.SILENCE,progress))==0,"last three seconds have no sustained audio");
         System.out.println("Finale choreography: "+checks+" continuity, cue, pause, duration and silence checks passed");

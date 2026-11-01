@@ -15,7 +15,7 @@ final class VerificationShaders {
     }
     static String read(Path directory,String file) throws IOException {
         String result=Files.readString(directory.resolve(file));
-        for(String include:new String[]{"field.glsl","finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl","finale_star_style.glsl"}) {
+        for(String include:new String[]{"field.glsl","schwarzschild.glsl","thermal.glsl","kerr.glsl","finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl","finale_star_style.glsl","composite_light.glsl","reconstruct.glsl","solution_bounds.glsl"}) {
             String directive="#include \""+include+"\"";
             if(result.contains(directive)) result=result.replace(directive,read(directory,include));
         }

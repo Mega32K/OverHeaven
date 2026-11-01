@@ -58,15 +58,16 @@ public final class BlackHoleEnvironmentVerification {
             layout(location=3) out vec4 Meta;
             void main(){Front=Back=vec4(0,0,0,1);Lens=vec4(.7,.7,65504,65504);Meta=vec4(1000000,1000000,0,2);}
             """;
-        try(var integrate=program("integrate");var composite=program("composite");var fill=new GlProgram(source("fullscreen.vsh"),fillSource);var fixed=new GlProgram(source("fullscreen.vsh"),fixedSource);
+        try(var mapProbe=new GlProgram(source("fullscreen.vsh"),"#version 330 core\nin vec2 texCoord;out vec4 Color;\n"+source("field.glsl")+"\nvoid main(){vec3 d=rayAt(texCoord);Color=vec4(environmentLens(texCoord,d,1000000.,sphere(Eye-Center,d,Outer*1.35+Thickness*2.)),1);}");var integrate=program("integrate");var composite=program("composite");var fill=new GlProgram(source("fullscreen.vsh"),fillSource);var fixed=new GlProgram(source("fullscreen.vsh"),fixedSource);
             var opaque=new GlTarget(GL_RGBA16F,GL_R32F);var surface=new GlTarget(GL_RGBA16F,GL_R32F);var scene=new GlTarget(GL_RGBA16F);var result=new GlTarget(GL_RGBA16F);
             var solution=new GlTarget(GL_RGBA16F,GL_RGBA16F,GL_RGBA32F,GL_RGBA32F);var bloom=new GlTarget(GL_RGBA16F);var stream=Files.newInputStream(resources.resolve("../../textures/blackhole/disk_detail.png"));var disk=new GlDiskTexture(stream)){
             GlState.fullscreen();for(var t:new GlTarget[]{opaque,surface,scene,result,solution,bloom})t.resize(W,H);
             surface.bind();glClearBufferfv(GL_COLOR,0,new float[]{1,1,1,1});glClearBufferfv(GL_COLOR,1,new float[]{1,0,0,0});bloom.bind();glClearBufferfv(GL_COLOR,0,new float[]{0,0,0,1});
             opaque.bind();fill.use();fill.integer("Late",0);draw();scene.bind();fill.integer("Late",1);draw();image(read(scene,0),output.resolve("late-input.png"));
+            result.bind();mapProbe.use();material(mapProbe,projection(),opaque,surface,disk,48);draw();float[] expected=center(result);check(Math.abs(expected[1]-.5)>.02,"fixture has nonzero analytic deflection");
             solution.bind();fixed.use();draw();result.bind();composite.use();material(composite,projection(),opaque,surface,disk,48);bindComposite(composite,scene,opaque,surface,solution,bloom);draw();
             image(read(result,0),output.resolve("late-lensed.png"));float[] late=center(result);
-            check(Math.abs(late[0]-.7)<.015 && Math.abs(late[1]-.7)<.015,"late sky/cloud color must move with lens, not stay at original UV: "+java.util.Arrays.toString(late));
+            check(Math.abs(late[0]-expected[0])<.015 && Math.abs(late[1]-expected[1])<.015,"late sky/cloud color must move with lens, not stay at original UV: "+java.util.Arrays.toString(late));
             if(args.length>2){
                 Path old=Path.of(args[2]);
                 String oldFragment=Files.readString(old.resolve("composite.fsh")).replace("#include \"field.glsl\"",Files.readString(old.resolve("field.glsl")));
@@ -77,10 +78,10 @@ public final class BlackHoleEnvironmentVerification {
                 }
             }
             // Oculus pre-refraction background mode shares the complete nontransparent scene.
-            result.bind();composite.use();material(composite,projection(),opaque,surface,disk,48);bindComposite(composite,scene,opaque,surface,solution,bloom);composite.integer("LayerMode",1);draw();late=center(result);check(Math.abs(late[0]-.7)<.015,"Oculus back layer must include late background");
+            result.bind();composite.use();material(composite,projection(),opaque,surface,disk,48);bindComposite(composite,scene,opaque,surface,solution,bloom);composite.integer("LayerMode",1);draw();late=center(result);check(Math.abs(late[1]-expected[1])<.015,"Oculus back layer must include late background");
             // A transparent source cannot be imported from completed color without its layer data.
-            surface.bind();glEnable(GL_SCISSOR_TEST);glScissor((int)(W*.65),(int)(H*.65),W/8,H/8);glClearBufferfv(GL_COLOR,1,new float[]{.5f,0,0,0});glDisable(GL_SCISSOR_TEST);
-            result.bind();composite.use();composite.integer("LayerMode",0);draw();late=center(result);check(Math.abs(late[0]-.5)<.015,"unresolved transparent source preserves destination");
+            surface.bind();glEnable(GL_SCISSOR_TEST);glScissor((int)(W*expected[0])-W/16,(int)(H*expected[1])-H/16,W/8,H/8);glClearBufferfv(GL_COLOR,1,new float[]{.5f,0,0,0});glDisable(GL_SCISSOR_TEST);
+            result.bind();composite.use();composite.integer("LayerMode",0);draw();late=center(result);check(Math.abs(late[1]-.5)<.015,"unresolved transparent source preserves destination");
             surface.bind();glClearBufferfv(GL_COLOR,1,new float[]{1,0,0,0});
             // No lens: completed sky is preserved, without early-color subtraction residue.
             var bounds=new BlackHoleScreenBounds();

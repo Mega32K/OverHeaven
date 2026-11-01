@@ -29,15 +29,21 @@ public final class BlackHoleRenderer implements AutoCloseable {
     private final GlCausalBackground opening=new GlCausalBackground();
     private final java.util.function.Consumer<GlProgram> openingUniforms=this::openingUniforms;
     private boolean openingActive,openingApplied;
-    private final GlTarget foreground = new GlTarget(GL_RGBA16F);
+    private final GlTarget foreground = new GlTarget(GL_RGBA16F), subjectFront=new GlTarget(GL_RGBA16F);
+    private final GlRect solutionRect=new GlRect();
+    private final DiskAdvection diskAdvection=new DiskAdvection();
+    private long emptySince;
+    private GlProgram frontResolve,reconstructionCount,compositeFull,blurFull,frontFull,countFull,activeBlur;
     private final Visible[] visible = new Visible[256];
     private final boolean cosmic;
     private float partial;
     private GlDiskTexture diskTexture;
     private float pixelAngle;
+    private double solutionScale;
     private GlProgram copy, integrate, composite, blur, foregroundComposite;
     private int vertexArray, outputFramebuffer, count, width, height;
-    private boolean captured, surfaceCaptured, alphaBorrowed, failed;
+    private boolean captured, surfaceCaptured, alphaBorrowed, failed, cleanupPending;
+    private boolean shaderHigh;
     private Object level;
     private double cameraX, cameraY, cameraZ, time;
     private String path = "vanilla";
@@ -46,10 +52,21 @@ public final class BlackHoleRenderer implements AutoCloseable {
 
     public void begin(Matrix4f modelView, Matrix4f projection, Camera camera, float partial) {
         if (OptionalShaders.shadow()) return;
+        // A failure can occur inside the adapter's FBO scope. Release only at the next
+        // host boundary, so an outer GlState never restores a framebuffer we just deleted.
+        if(cleanupPending) {
+            Object previousLevel=level;
+            try(var state=GlState.capture()) { close(); } finally { failed=true;level=previousLevel; }
+        }
         restoreAlpha();
         if (level != Minecraft.getInstance().level) { close(); level=Minecraft.getInstance().level; }
         captured=false; surfaceCaptured=false; count=0; openingActive=false; openingApplied=false;
-        if (failed || level==null || BlackHoleClient.records().isEmpty() && !FinaleClient.active() || FinaleClient.skipWorld(partial)) return;
+        boolean empty=BlackHoleClient.records().isEmpty() && !FinaleClient.active();
+        if(empty) {
+            long now=System.nanoTime();if(emptySince==0) emptySince=now;
+            if(now-emptySince>=30_000_000_000L && scene.framebuffer!=0) try(var state=GlState.capture()) { releaseTargets(); }
+        } else emptySince=0;
+        if (failed || level==null || empty || FinaleClient.skipWorld(partial)) return;
         if(!org.lwjgl.opengl.GL.getCapabilities().OpenGL33) { fail(new IllegalStateException("Black holes require OpenGL 3.3")); return; }
         var position=camera.getPosition(); cameraX=position.x; cameraY=position.y; cameraZ=position.z;
         matrices(modelView,projection);
@@ -60,7 +77,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
         this.partial=partial;
         openingActive=CausalUniforms.sceneActive(partial);
         collectVisible();
-        timing.frame(BlackHoleClient.diagnostics,active(),path,width,height);
+        timing.frame(BlackHoleClient.diagnostics,active(),path+(FinaleClient.active()?"/"+FinaleClient.frame(partial).phase().id():"/ordinary"),width,height);
     }
     private void collectVisible() {
         BlackHole source=FinaleClient.active()?FinaleClient.state().hole():null;
@@ -77,6 +94,7 @@ public final class BlackHoleRenderer implements AutoCloseable {
         double relativeX=hole.x()-cameraX, relativeY=hole.y()-cameraY, relativeZ=hole.z()-cameraZ;
         entry.distance=relativeX*relativeX+relativeY*relativeY+relativeZ*relativeZ;
         double extent=hole.value("outer")*1.35+hole.value("thickness")*2.0;
+        if(relativistic(hole)) extent=Math.max(extent,32.0*hole.value("radius")*hole.value("lensing")/Math.sqrt(27.0));
         if(FinaleClient.source(hole.id())) {
             extent*=Math.max(1,CausalUniforms.bodyScale(hole.id(),partial));
             com.mega.overheaven.foliagecompat.finale.FinaleWaves.evaluate(FinaleClient.state().timeline(),FinaleClient.ticks(partial),hole.value("radius"),hole.value("outer"),hole.value("thickness"),waveBounds);
@@ -93,15 +111,15 @@ public final class BlackHoleRenderer implements AutoCloseable {
         width=destination.width; height=destination.height; pixelAngle=angle;
         time=BlackHoleClient.time(partial); count=0; path="finale/cosmos";
         collectVisible();
-        timing.frame(BlackHoleClient.diagnostics,count>0,path,width,height);
+        timing.frame(BlackHoleClient.diagnostics,count>0,path+"/"+FinaleClient.frame(partial).phase().id(),width,height);
         if(count==0) return;
         try(var state=GlState.capture()) {
-            initialize(width,height); GlState.fullscreen();
+            timing.start("cosmic-prepare");initialize(width,height); GlState.fullscreen();
             transparent.bind(); glClearBufferfv(GL_COLOR,0,UNIT_TRANSMISSION); glClearBufferfv(GL_COLOR,1,FAR_DEPTH);
-            opaque.bind(); copy.use(); copy.texture("Source",0,destination.textures[0]); copy.texture("Depth",1,transparent.textures[1]); copy.integer("Mode",0); draw();
+            timing.end("cosmic-prepare");
             captured=true; surfaceCaptured=true;
             render(destination.textures[0],destination.framebuffer,true);
-        }
+        } finally { timing.end("cosmic-prepare"); }
     }
     private boolean project(Visible entry,double centerX,double centerY,double centerZ,double extent) {
         if(!screenBounds.project(viewProjection,opticalEye,centerX,centerY,centerZ,extent,width,height)) return false;
@@ -150,18 +168,19 @@ public final class BlackHoleRenderer implements AutoCloseable {
     }
     private void captureOpaque(int color,int depth,int targetWidth,int targetHeight,int extraDepth) {
         if(!active()) return;
+        long submitStart=System.nanoTime();
         try(var state=GlState.capture()) {
-            timing.start(0); initialize(targetWidth,targetHeight); GlState.fullscreen();
+            timing.start("opaque-capture"); initialize(targetWidth,targetHeight); GlState.fullscreen();
             opaque.bind(); copy.use(); copy.texture("Source",0,color); copy.texture("Depth",1,depth); copy.integer("Mode",0); copy.integer("MergeDepth",extraDepth==0?0:1); copy.texture("ExtraDepth",2,extraDepth==0?depth:extraDepth); draw(); copy.integer("MergeDepth",0); captured=true;
         } catch(RuntimeException exception) { fail(exception); }
-        finally { timing.end(0); }
+        finally { timing.end("opaque-capture");timing.cpu("capture-with-state",(System.nanoTime()-submitStart)/1e6); }
     }
     public void captureSurface(int transmittance,int depth,int mode) {
         if(!captured || !active()) return;
         try(var state=GlState.capture()) {
-            timing.start(1); GlState.fullscreen(); transparent.bind(); copy.use(); copy.texture("Source",0,transmittance); copy.texture("Depth",1,depth); copy.integer("Mode",mode); draw(); surfaceCaptured=true;
+            timing.start("surface-capture"); GlState.fullscreen(); transparent.bind(); copy.use(); copy.texture("Source",0,transmittance); copy.texture("Depth",1,depth); copy.integer("Mode",mode); draw(); surfaceCaptured=true;
         } catch(RuntimeException exception) { fail(exception); }
-        finally { timing.end(1); }
+        finally { timing.end("surface-capture"); }
     }
     public void finishVanilla() {
         restoreAlpha();
@@ -180,47 +199,99 @@ public final class BlackHoleRenderer implements AutoCloseable {
     }
     private void render(int color,int framebuffer,boolean displaySpace) {
         if(!surfaceCaptured || !active()) return;
+        long submitStart=System.nanoTime();
         try(var state=GlState.capture()) {
-            timing.start(2); GlState.fullscreen();
+            timing.start("subjects-total"); GlState.fullscreen();
             if(!displaySpace) { foreground.bind(); glClearBufferfv(GL_COLOR,0,CLEAR_LIGHT); }
             if(openingActive && !openingApplied) {
-                opening.render(color,opaque.textures[0],width,height,vertexArray,openingUniforms);
+                timing.start("opening");opening.render(color,opaque.textures[0],width,height,vertexArray,openingUniforms);
                 glBindFramebuffer(GL_READ_FRAMEBUFFER,opening.result.framebuffer);glReadBuffer(GL_COLOR_ATTACHMENT0);
                 glBindFramebuffer(GL_DRAW_FRAMEBUFFER,framebuffer);
                 glBlitFramebuffer(0,0,width,height,0,0,width,height,GL_COLOR_BUFFER_BIT,GL_NEAREST);
-                openingApplied=true;
+                openingApplied=true;timing.end("opening");
             }
+            // One immutable full snapshot; subsequent subjects refresh only the previous write rect.
+            timing.start("scene-copy");copyScene(color,null);timing.end("scene-copy");
+            long pixels=0;
             for(int index=0;index<count;index++) {
                 Visible entry=visible[index]; BlackHole hole=entry.hole;
                 prepareGlare(entry);
-                scene.bind(); copy.use(); copy.texture("Source",0,color); copy.texture("Depth",1,opaque.textures[1]); copy.integer("Mode",0); draw();
-                solution.bind(); glClearBufferfv(GL_COLOR,0,CLEAR_LIGHT); glClearBufferfv(GL_COLOR,1,CLEAR_LIGHT); glClearBufferfv(GL_COLOR,2,CLEAR_LIGHT_ZERO); glClearBufferfv(GL_COLOR,3,CLEAR_META);
-                scissor(entry,solution.width,solution.height); integrate.use(); material(integrate,hole); draw(); glDisable(GL_SCISSOR_TEST);
-                if(FinaleClient.source(hole.id())) FinaleRenderer.INSTANCE.nearGeometry(opaque.textures[1],transparent.textures[1],solution.width,solution.height,partial);
-                if(effectiveGlow(hole)>0) { prepareBlur(hole); renderBloom(entry,displaySpace?1:2); }
+                if(index>0) { timing.start("scene-copy");copyScene(color,visible[index-1]);timing.end("scene-copy"); }
+                solutionRect.normalized(entry.left/(float)width-2f/solution.width,entry.bottom/(float)height-2f/solution.height,
+                    entry.right/(float)width+2f/solution.width,entry.top/(float)height+2f/solution.height,solution.width,solution.height);
+                timing.start("solve");solution.bind();if(solutionRect.full(solution.width,solution.height)) glDisable(GL_SCISSOR_TEST);else solutionRect.scissor();
+                glClearBufferfv(GL_COLOR,0,CLEAR_LIGHT);glClearBufferfv(GL_COLOR,1,CLEAR_LIGHT);
+                glClearBufferfv(GL_COLOR,2,CLEAR_LIGHT_ZERO);glClearBufferfv(GL_COLOR,3,CLEAR_META);
+                integrate.use();material(integrate,hole);draw();
+                glDisable(GL_SCISSOR_TEST);timing.end("solve");
+                if(effectiveGlow(hole)>0) { timing.start("bloom-back");prepareBlur(hole);renderBloom(entry,displaySpace?1:2);timing.end("bloom-back"); }
                 if(glare.enabled()) {
-                    GlProgram sourceProgram=glare.begin(); material(sourceProgram,hole);
-                    sourceProgram.texture("Transmission",2,transparent.textures[0]); draw();
+                    timing.start("glare-source");GlProgram sourceProgram=glare.begin();material(sourceProgram,hole);
+                    sourceProgram.texture("Transmission",2,transparent.textures[0]);draw();timing.end("glare-source");
                 }
-                glBindFramebuffer(GL_FRAMEBUFFER,framebuffer); glViewport(0,0,width,height); glowScissor(entry);
-                prepareComposite(hole,displaySpace,displaySpace?0:1); draw(); glDisable(GL_SCISSOR_TEST);
+                glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);glViewport(0,0,width,height);glowScissor(entry);
                 if(!displaySpace) {
-                    if(effectiveGlow(hole)>0) { prepareBlur(hole); renderBloom(entry,3); }
-                    foreground.bind(); glowScissor(entry); prepareComposite(hole,false,2);
-                    glEnable(GL_BLEND); glBlendEquationSeparate(GL_FUNC_ADD,GL_FUNC_ADD); glBlendFuncSeparate(GL_ONE,GL_SRC_ALPHA,GL_ZERO,GL_SRC_ALPHA); draw(); glDisable(GL_BLEND); glDisable(GL_SCISSOR_TEST);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT1,GL_TEXTURE_2D,subjectFront.textures[0],0);
+                    glDrawBuffers(new int[]{GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1});
+                    if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE) throw new IllegalStateException("Split subject framebuffer incomplete");
                 }
+                try { timing.start("reconstruct-compose");prepareComposite(hole,displaySpace,displaySpace?0:1);draw();timing.end("reconstruct-compose"); }
+                finally { if(!displaySpace) { glDrawBuffer(GL_COLOR_ATTACHMENT0);glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT1,GL_TEXTURE_2D,0,0); } }
+                classify(entry,hole);
+                glDisable(GL_SCISSOR_TEST);
+                if(!displaySpace) {
+                    if(effectiveGlow(hole)>0) { timing.start("bloom-front");prepareBlur(hole);renderBloom(entry,3);timing.end("bloom-front"); }
+                    timing.start("front-accumulate");foreground.bind();glowScissor(entry);
+                    GlProgram front=frontResolve;
+                    if(solutionRect.full(solution.width,solution.height)) { if(frontFull==null) frontFull=specialized("subject_front");front=frontFull; }
+                    front.use();material(front,hole);front.integer("LayerMode",2);
+                    front.texture("CachedSubject",3,subjectFront.textures[0]);front.texture("Transmission",2,transparent.textures[0]);
+                    front.texture("Bloom",7,bloom.result().textures[0]);bloom.bounds(front);glare.bind(front);
+                    glEnable(GL_BLEND);glBlendEquationSeparate(GL_FUNC_ADD,GL_FUNC_ADD);glBlendFuncSeparate(GL_ONE,GL_SRC_ALPHA,GL_ZERO,GL_SRC_ALPHA);
+                    draw();glDisable(GL_BLEND);glDisable(GL_SCISSOR_TEST);timing.end("front-accumulate");
+                }
+                pixels+=(long)(entry.compositeRight-entry.compositeLeft)*(entry.compositeTop-entry.compositeBottom);
             }
+            timing.metrics(count,pixels,ownedBytes());
         } catch(RuntimeException exception) { fail(exception); }
-        finally { timing.end(2); }
+        finally { timing.end("subjects-total");timing.cpu("subjects-with-state",(System.nanoTime()-submitStart)/1e6); }
     }
+    private GlProgram specialized(String name) {
+        long started=System.nanoTime();
+        try { return new GlProgram(name,true,shaderHigh); } finally { timing.cpu("programs",(System.nanoTime()-started)/1e6); }
+    }
+    private int depthTexture() { return cosmic?transparent.textures[1]:opaque.textures[1]; }
+    private void copyScene(int color,Visible previous) {
+        scene.bind();if(previous==null) glDisable(GL_SCISSOR_TEST);else glowScissor(previous);
+        copy.use();copy.texture("Source",0,color);copy.texture("Depth",1,depthTexture());copy.integer("Mode",0);draw();glDisable(GL_SCISSOR_TEST);
+    }
+    private void classify(Visible entry,BlackHole hole) {
+        if(!timing.classify()) return;
+        if(reconstructionCount==null) reconstructionCount=new GlProgram("reconstruction_count",false,shaderHigh);
+        GlProgram classifier=reconstructionCount;
+        if(solutionRect.full(solution.width,solution.height)) { if(countFull==null) countFull=specialized("reconstruction_count");classifier=countFull; }
+        timing.start("diagnostic-classify");classifier.use();material(classifier,hole);
+        classifier.texture("FrontTexture",3,solution.textures[0]);classifier.texture("BackTexture",4,solution.textures[1]);classifier.texture("MetaTexture",6,solution.textures[3]);
+        glColorMask(false,false,false,false);
+        try {
+            for(int mode=0;mode<2;mode++) {
+                String name=mode==0?"eligible":"fallback";classifier.integer("FallbackOnly",mode);timing.countStart(name);
+                try { draw(); } finally { timing.countEnd(name); }
+            }
+        } finally { glColorMask(true,true,true,true);timing.end("diagnostic-classify"); }
+    }
+    private long ownedBytes() { return opaque.bytes()+transparent.bytes()+scene.bytes()+solution.bytes()+foreground.bytes()+subjectFront.bytes()+bloom.bytes()+opening.result.bytes()+glare.source.bytes(); }
+    private void releaseTargets() { opaque.close();transparent.close();scene.close();solution.close();foreground.close();subjectFront.close();bloom.close();opening.result.close();captured=false;surfaceCaptured=false; }
     private void openingUniforms(GlProgram program) { material(program,FinaleClient.state().hole()); }
     public void clearOpening() {
         try(var state=GlState.capture()) { opening.close(); }
         openingActive=false;openingApplied=false;
     }
     private void prepareBlur(BlackHole hole) {
-        blur.use(); material(blur,hole); blur.texture("FrontTexture",0,solution.textures[0]); blur.texture("BackTexture",1,solution.textures[1]); blur.texture("Transmission",2,transparent.textures[0]); blur.texture("LensTexture",3,solution.textures[2]);
-        blur.pair("FullSize",width,height);
+        activeBlur=blur;
+        if(solutionRect.full(solution.width,solution.height)) { if(blurFull==null) blurFull=specialized("bloom");activeBlur=blurFull; }
+        activeBlur.use(); material(activeBlur,hole); activeBlur.texture("FrontTexture",0,solution.textures[0]); activeBlur.texture("BackTexture",1,solution.textures[1]); activeBlur.texture("Transmission",2,transparent.textures[0]); activeBlur.texture("LensTexture",3,solution.textures[2]);
+        activeBlur.pair("FullSize",width,height);
     }
     private void prepareGlare(Visible entry) {
         entry.compositeLeft=entry.glowLeft; entry.compositeBottom=entry.glowBottom;
@@ -236,26 +307,30 @@ public final class BlackHoleRenderer implements AutoCloseable {
         entry.compositeRight=Math.max(entry.compositeRight,glare.right); entry.compositeTop=Math.max(entry.compositeTop,glare.top);
     }
     private void renderBloom(Visible entry,int mode) {
-        bloom.render(blur,mode,vertexArray,entry.glowLeft/(float)width,entry.glowBottom/(float)height,entry.glowRight/(float)width,entry.glowTop/(float)height);
+        bloom.render(activeBlur,mode,vertexArray,entry.glowLeft/(float)width,entry.glowBottom/(float)height,entry.glowRight/(float)width,entry.glowTop/(float)height);
     }
     private void prepareComposite(BlackHole hole,boolean displaySpace,int mode) {
-        composite.use(); material(composite,hole);
-        composite.texture("Scene",0,scene.textures[0]); composite.texture("Opaque",1,openingApplied?opening.result.textures[1]:opaque.textures[0]); composite.texture("Transmission",2,transparent.textures[0]);
-        composite.texture("FrontTexture",3,solution.textures[0]); composite.texture("BackTexture",4,solution.textures[1]); composite.texture("LensTexture",5,solution.textures[2]); composite.texture("MetaTexture",6,solution.textures[3]); composite.texture("Bloom",7,bloom.result().textures[0]);
-        composite.scalar("Glow",effectiveGlow(hole)); composite.integer("DisplaySpace",displaySpace?1:0); composite.integer("LayerMode",mode);
-        glare.bind(composite);
+        GlProgram p=composite;
+        if(solutionRect.full(solution.width,solution.height)) { if(compositeFull==null) compositeFull=specialized("composite");p=compositeFull; }
+        p.use(); material(p,hole);
+        p.texture("Scene",0,scene.textures[0]); p.texture("Opaque",1,openingApplied?opening.result.textures[1]:cosmic?scene.textures[0]:opaque.textures[0]); p.texture("Transmission",2,transparent.textures[0]);
+        p.texture("FrontTexture",3,solution.textures[0]); p.texture("BackTexture",4,solution.textures[1]); p.texture("LensTexture",5,solution.textures[2]); p.texture("MetaTexture",6,solution.textures[3]); p.texture("Bloom",7,bloom.result().textures[0]);
+        p.scalar("Glow",effectiveGlow(hole)); p.integer("DisplaySpace",displaySpace?1:0); p.integer("LayerMode",mode);
+        bloom.bounds(p);glare.bind(p);
     }
     public void afterOculusRefraction(int color,int framebuffer) {
         if(!active() || !captured || foregroundComposite==null) return;
         try(var state=GlState.capture()) {
-            timing.start(3); GlState.fullscreen();
+            timing.start("host-front-compose"); GlState.fullscreen();
             scene.bind(); copy.use(); copy.texture("Source",0,color); copy.texture("Depth",1,opaque.textures[1]); copy.integer("Mode",0); draw();
             glBindFramebuffer(GL_FRAMEBUFFER,framebuffer); glViewport(0,0,width,height); foregroundComposite.use(); foregroundComposite.texture("Scene",0,scene.textures[0]); foregroundComposite.texture("Foreground",1,foreground.textures[0]); draw();
         } catch(RuntimeException exception) { fail(exception); }
-        finally { timing.end(3); }
+        finally { timing.end("host-front-compose"); }
     }
     private void material(GlProgram program,BlackHole hole) {
-        program.matrix("VP",viewProjection); program.matrix("InverseVP",inverse); program.vector("Eye",opticalEye.x,opticalEye.y,opticalEye.z);
+        program.integer("Relativistic",relativistic(hole)?1:0);
+        program.scalar("Spin",BlackHoleClient.spin);
+        program.integer("SkipFieldLens",1);program.pair("SceneSize",width,height);program.matrix("VP",viewProjection); program.matrix("InverseVP",inverse); program.vector("Eye",opticalEye.x,opticalEye.y,opticalEye.z);
         program.vector("Center",(float)(hole.x()-cameraX),(float)(hole.y()-cameraY),(float)(hole.z()-cameraZ));
         double tilt=Math.toRadians(hole.value("tilt")), yaw=Math.toRadians(hole.value("yaw"));
         program.vector("DiskNormal",(float)(Math.sin(yaw)*Math.sin(tilt)),(float)Math.cos(tilt),(float)(Math.cos(yaw)*Math.sin(tilt)));
@@ -265,12 +340,14 @@ public final class BlackHoleRenderer implements AutoCloseable {
         for(int index=0;index<MATERIAL.length;index++) program.scalar(UNIFORMS[index],hole.value(MATERIAL[index]));
         program.scalar("Glow",effectiveGlow(hole));
         FinaleRenderer.nearUniforms(program,hole.id(),partial);
-        program.scalar("Time",hole.time(time)%1048576.0); program.scalar("Seed",(hole.seed()&65535)/257.0); program.integer("Steps",BlackHoleClient.steps);
-        program.scalar("PixelAngle",pixelAngle/(program==integrate?BlackHoleClient.resolution:1.0f));
+        diskAdvection.evaluate(hole.time(time),hole.value("rotation"),hole.value("infall"),hole.value("outer")-hole.value("inner"),hole.seed());diskAdvection.apply(program); program.scalar("Seed",(hole.seed()&65535)/257.0); program.integer("Steps",BlackHoleClient.steps);
+        program.scalar("PixelAngle",pixelAngle/(program==integrate?solutionScale:1.0f));
         program.texture("DiskTexture",10,diskTexture.handle());
-        program.texture("OpaqueDepth",8,opaque.textures[1]); program.texture("SurfaceDepth",9,transparent.textures[1]);
+        program.integer("SolutionBounded",solutionRect.full(solution.width,solution.height)?0:1);solutionRect.upload(program,"SolutionBounds");
+        program.texture("OpaqueDepth",8,depthTexture()); program.texture("SurfaceDepth",9,transparent.textures[1]);
     }
     private static void color(GlProgram program,String name,int color) { program.vector(name,((color>>16)&255)/255.0f,((color>>8)&255)/255.0f,(color&255)/255.0f); }
+    private static boolean relativistic(BlackHole hole) { return BlackHoleClient.steps>=96; }
     private double effectiveGlow(BlackHole hole) {
         return FinaleClient.source(hole.id())?Math.max(hole.value("glow"),FinaleClient.pulse(partial)*3):hole.value("glow");
     }
@@ -284,26 +361,49 @@ public final class BlackHoleRenderer implements AutoCloseable {
         glEnable(GL_SCISSOR_TEST); glScissor(entry.compositeLeft,entry.compositeBottom,entry.compositeRight-entry.compositeLeft,entry.compositeTop-entry.compositeBottom);
     }
     private void initialize(int targetWidth,int targetHeight) {
+        long cpuStart=System.nanoTime();
         width=targetWidth; height=targetHeight;
-        if(copy==null) { copy=new GlProgram("copy"); integrate=new GlProgram("integrate"); composite=new GlProgram("composite"); blur=new GlProgram("bloom"); foregroundComposite=new GlProgram("foreground"); vertexArray=glGenVertexArrays(); outputFramebuffer=glGenFramebuffers(); }
+        if(copy==null) { copy=new GlProgram("copy"); foregroundComposite=new GlProgram("foreground"); vertexArray=glGenVertexArrays(); outputFramebuffer=glGenFramebuffers(); }
+        if(integrate==null || shaderHigh!=(BlackHoleClient.steps>=96)) {
+            closeFieldPrograms();shaderHigh=BlackHoleClient.steps>=96;
+            integrate=new GlProgram("integrate",false,shaderHigh);composite=new GlProgram("composite",false,shaderHigh);blur=new GlProgram("bloom",false,shaderHigh);
+        }
+        if(!cosmic && OptionalShaders.active() && frontResolve==null) frontResolve=new GlProgram("subject_front",false,shaderHigh);
+        timing.cpu("programs",(System.nanoTime()-cpuStart)/1e6);cpuStart=System.nanoTime();
         if(diskTexture==null) diskTexture=GlDiskTexture.load();
-        opaque.resize(width,height); transparent.resize(width,height); scene.resize(width,height);
-        solution.resize(Math.max(1,(int)Math.ceil(width*BlackHoleClient.resolution)),Math.max(1,(int)Math.ceil(height*BlackHoleClient.resolution)));
+        timing.cpu("material-upload",(System.nanoTime()-cpuStart)/1e6);cpuStart=System.nanoTime();
+        if(!cosmic) opaque.resize(width,height);
+        transparent.resize(cosmic?1:width,cosmic?1:height);scene.resize(width,height);
+        solutionScale=BlackHoleClient.resolution;
+        for(int index=0;index<count;index++) if(relativistic(visible[index].hole)) { solutionScale=1.;break; }
+        solution.resize(Math.max(1,(int)Math.ceil(width*solutionScale)),Math.max(1,(int)Math.ceil(height*solutionScale)));
         bloom.resize(width,height,BlackHoleClient.steps);
-        if(!cosmic) foreground.resize(width,height);
+        if(!cosmic && OptionalShaders.active()) {
+            foreground.resize(width,height);subjectFront.resize(width,height);
+        } else { foreground.close();subjectFront.close(); }
+        timing.cpu("targets",(System.nanoTime()-cpuStart)/1e6);
     }
-    private void fail(RuntimeException exception) { if(!failed) PatchLog.LOGGER.error("Black hole rendering suspended until resource reload; path={}",path,exception); failed=true; count=0; if(cosmic) throw exception; if(FinaleClient.active()) FinaleClient.fail(exception); }
+    private void fail(RuntimeException exception) {
+        if(!failed) PatchLog.LOGGER.error("Black hole rendering suspended until resource reload; path={}",path,exception);
+        failed=true;cleanupPending=true;count=0;
+        if(cosmic) throw exception;if(FinaleClient.active()) FinaleClient.fail(exception);
+    }
     public void suspend(String reason) { fail(new IllegalStateException(reason)); }
     @Override public void close() {
         if(!cosmic) OptionalShaders.reset();
-        restoreAlpha(); opaque.close(); transparent.close(); scene.close(); solution.close(); bloom.close(); glare.close(); opening.close(); openingActive=false;openingApplied=false;foreground.close(); timing.close();
-        if(copy!=null) copy.close(); if(integrate!=null) integrate.close(); if(composite!=null) composite.close(); if(blur!=null) blur.close();
+        restoreAlpha(); opaque.close(); transparent.close(); scene.close(); solution.close(); bloom.close(); glare.close(); opening.close(); openingActive=false;openingApplied=false;foreground.close();subjectFront.close(); timing.close();
+        if(copy!=null) copy.close();closeFieldPrograms();
         if(foregroundComposite!=null) foregroundComposite.close(); foregroundComposite=null;
+        emptySince=0;
         copy=null; integrate=null; composite=null; blur=null;
         if(diskTexture!=null) diskTexture.close(); diskTexture=null;
         if(vertexArray!=0) glDeleteVertexArrays(vertexArray); if(outputFramebuffer!=0) glDeleteFramebuffers(outputFramebuffer);
-        vertexArray=0; outputFramebuffer=0; count=0; captured=false; surfaceCaptured=false; failed=false; level=null;
+        vertexArray=0; outputFramebuffer=0; count=0; captured=false; surfaceCaptured=false; failed=false;cleanupPending=false; level=null;
         for(var entry:visible) entry.hole=null;
+    }
+    private void closeFieldPrograms() {
+        for(GlProgram p:new GlProgram[]{integrate,composite,blur,frontResolve,reconstructionCount,compositeFull,blurFull,frontFull,countFull})if(p!=null)p.close();
+        integrate=composite=blur=frontResolve=reconstructionCount=compositeFull=blurFull=frontFull=countFull=activeBlur=null;
     }
     private static final class Visible { BlackHole hole; int left,bottom,right,top,glowLeft,glowBottom,glowRight,glowTop,compositeLeft,compositeBottom,compositeRight,compositeTop; double distance; }
 }
