@@ -6,6 +6,7 @@ public final class IllusionTpPlayback {
     public static final double START_SPEED = 0.2;
     public static final double SPEED_RAMP_SECONDS = 1.5;
     public static final double DEPTH_FADE_SECONDS = 0.25;
+    public static final double BLOCK_GLITCH_SECONDS = 0.35;
     public enum Phase { COVERING, WAITING, ARRIVED, REVEALING, FINISHED }
     public enum Signal { NONE, COVERED, FINISHED }
     private Phase phase = Phase.COVERING;
@@ -22,6 +23,11 @@ public final class IllusionTpPlayback {
     /** Radius reached five ticks ago: pixels behind this tail are already pure grey. */
     public double fadedRadius(float partial) {
         return radiusAt(Math.max(0.0, (ticks + partial) / 20.0 - DEPTH_FADE_SECONDS));
+    }
+    /** Completion follows the last local glitch deadline; the visible wave keeps its original radius. */
+    public double settledRadius(float partial) {
+        double delay = DEPTH_FADE_SECONDS + (phase == Phase.REVEALING ? BLOCK_GLITCH_SECONDS : 0.0);
+        return radiusAt(Math.max(0.0, (ticks + partial) / 20.0 - delay));
     }
     private static double radiusAt(double seconds) {
         double rampContribution;

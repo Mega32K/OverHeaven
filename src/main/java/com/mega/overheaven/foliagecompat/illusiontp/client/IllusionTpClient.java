@@ -60,6 +60,9 @@ public final class IllusionTpClient {
     public static double fadedRadius(float partial) {
         return active() ? playback.fadedRadius(Minecraft.getInstance().isPaused() ? 0 : partial) : 0;
     }
+    public static double settledRadius(float partial) {
+        return active() ? playback.settledRadius(Minecraft.getInstance().isPaused() ? 0 : partial) : 0;
+    }
     public static boolean destinationReady() {
         var mc = Minecraft.getInstance();
         if (state == null || state.action() != IllusionTpNetwork.ARRIVED || mc.level == null || mc.player == null

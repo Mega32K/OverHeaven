@@ -17,7 +17,7 @@ public final class IllusionTpRenderer implements AutoCloseable {
     private GlTarget hand = new GlTarget(GL_R32F), handScratch = new GlTarget(GL_R32F);
     private final Matrix4f inverseVP = new Matrix4f();
     private final Vector4f eye = new Vector4f(), point = new Vector4f();
-    private GlProgram capture, compose;
+    private GlProgram capture, compose, sort;
     private int vao, depthSampler, oculusDepth, coverageQuery;
     private int coveragePhase = -1;
     private boolean coveragePending, coverageComplete;
@@ -156,7 +156,7 @@ public final class IllusionTpRenderer implements AutoCloseable {
         // Reveal reverses the local sequence: the scene-restoring edge follows the depth fade-in.
         double radius = reveal ? fadedRadius : IllusionTpClient.radius(partial);
         double width = 24.0 * Math.hypot(1.0 / target.width, 1.0 / target.height);
-        boolean complete = worldCaptured && fadedRadius >= farthestDistance + width * 4.5 + 2.0;
+        boolean complete = worldCaptured && IllusionTpClient.settledRadius(partial) >= farthestDistance + width * 4.5 + 2.0;
         try (var saved = GlState.capture()) {
             prepare();
             if (!scanning) {
@@ -179,25 +179,20 @@ public final class IllusionTpRenderer implements AutoCloseable {
             glBindFramebuffer(GL_READ_FRAMEBUFFER, target.frameBufferId);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, scene.framebuffer);
             glBlitFramebuffer(0, 0, target.width, target.height, 0, 0, target.width, target.height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            int sortedIndices = depth.textures[0];
+            if (scanning && !complete) {
+                if (sort == null) sort = new GlProgram("illusion_tp_sort");
+                frameUniforms(sort, target.width, target.height, reveal, radius, partial);
+                // Both hand passes have finished. Reuse their dead scratch copies, never the final hand mask.
+                sortedIndices = sortIndices(scene, beforeHand, handScratch, sort);
+            }
             glBindFramebuffer(GL_FRAMEBUFFER, target.frameBufferId);
             glViewport(0, 0, target.width, target.height);
-            compose.use();
-            compose.texture("Scene", 0, scene.textures[0]);
-            compose.texture("SceneDepth", 1, depth.textures[0]);
-            compose.texture("HandMask", 2, hand.textures[0]);
-            compose.integer("HasHand", handPresent ? 1 : 0);
-            compose.integer("Reveal", reveal ? 1 : 0);
+            frameUniforms(compose, target.width, target.height, reveal, radius, partial);
+            compose.texture("SortedIndices", 3, sortedIndices);
             compose.integer("ForceCovered", forceCovered ? 1 : 0);
             compose.integer("Complete", complete ? 1 : 0);
-            compose.vector4("WaveTiming", IllusionTpPlayback.TIME_SCALE, IllusionTpPlayback.START_SPEED,
-                    IllusionTpPlayback.SPEED_RAMP_SECONDS, IllusionTpPlayback.DEPTH_FADE_SECONDS);
             compose.integer("CoverageOnly", 0);
-            compose.matrix("InverseVP", inverseVP);
-            compose.vector("Eye", eye.x, eye.y, eye.z);
-            compose.pair("PixelSize", 1.0f / target.width, 1.0f / target.height);
-            compose.scalar("Horizon", horizonDistance);
-            compose.scalar("Radius", radius);
-            compose.scalar("Progress", IllusionTpClient.progress(partial));
             glDrawArrays(GL_TRIANGLES, 0, 3);
             if (scanning && !complete && !coveragePending
                     && glGetQueryi(GL_ANY_SAMPLES_PASSED, GL_CURRENT_QUERY) == 0) {
@@ -216,16 +211,61 @@ public final class IllusionTpRenderer implements AutoCloseable {
         // Confirm only after the final display-space composition, outside the GL state scope.
         IllusionTpClient.rendered(complete, worldCaptured, complete && !reveal && !forceCovered);
     }
+    private void frameUniforms(GlProgram program, int width, int height, boolean reveal, double radius, float partial) {
+        program.use();
+        program.texture("Scene", 0, scene.textures[0]);
+        program.texture("SceneDepth", 1, depth.textures[0]);
+        program.texture("HandMask", 2, hand.textures[0]);
+        program.integer("HasHand", handPresent ? 1 : 0);
+        program.integer("Reveal", reveal ? 1 : 0);
+        program.vector4("WaveTiming", IllusionTpPlayback.TIME_SCALE, IllusionTpPlayback.START_SPEED,
+                IllusionTpPlayback.SPEED_RAMP_SECONDS, IllusionTpPlayback.DEPTH_FADE_SECONDS);
+        program.scalar("BlockGlitchSeconds", IllusionTpPlayback.BLOCK_GLITCH_SECONDS);
+        program.matrix("InverseVP", inverseVP);
+        program.vector("Eye", eye.x, eye.y, eye.z);
+        program.pair("PixelSize", 1.0f / width, 1.0f / height);
+        program.scalar("Horizon", horizonDistance);
+        program.scalar("Radius", radius);
+        program.scalar("Progress", IllusionTpClient.progress(partial));
+    }
+    /** Stable full-resolution row sorting. R32F stores exact (strip, source index) pairs. */
+    static int sortIndices(GlTarget scene, GlTarget ping, GlTarget pong, GlProgram program) {
+        ping.resize(scene.width, scene.height);
+        pong.resize(scene.width, scene.height);
+        program.use();
+        program.texture("Scene", 0, scene.textures[0]);
+        program.texture("Source", 3, scene.textures[0]);
+        program.integer("Pass", 0);
+        ping.bind(); glDrawArrays(GL_TRIANGLES, 0, 3);
+        int source = ping.textures[0];
+        GlTarget destination = pong;
+        program.integer("Pass", 1);
+        for (int step = 1; step < 128; step <<= 1) {
+            destination.bind(); program.texture("Source", 3, source); program.integer("Step", step);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+            source = destination.textures[0]; destination = destination == ping ? pong : ping;
+        }
+        program.integer("Pass", 2);
+        boolean first = true;
+        for (int stage = 2; stage <= 128; stage <<= 1) for (int step = stage >> 1; step > 0; step >>= 1) {
+            destination.bind(); program.texture("Source", 3, source);
+            program.integer("Stage", stage); program.integer("Step", step); program.integer("FirstPass", first ? 1 : 0);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+            source = destination.textures[0]; destination = destination == ping ? pong : ping; first = false;
+        }
+        return source;
+    }
     @Override public void close() {
-        if (vao == 0 && capture == null && compose == null) { beginFrame(); return; }
+        if (vao == 0 && capture == null && compose == null && sort == null) { beginFrame(); return; }
         try (var saved = GlState.capture()) {
             scene.close(); depth.close(); beforeHand.close(); hand.close(); handScratch.close();
             if (capture != null) capture.close();
             if (compose != null) compose.close();
+            if (sort != null) sort.close();
             if (vao != 0) glDeleteVertexArrays(vao);
             if (depthSampler != 0) glDeleteSamplers(depthSampler);
             if (coverageQuery != 0) glDeleteQueries(coverageQuery);
-            capture = null; compose = null; vao = 0; depthSampler = 0; coverageQuery = 0;
+            capture = null; compose = null; sort = null; vao = 0; depthSampler = 0; coverageQuery = 0;
             coveragePhase = -1; coveragePending = false; coverageComplete = false;
         }
         beginFrame();

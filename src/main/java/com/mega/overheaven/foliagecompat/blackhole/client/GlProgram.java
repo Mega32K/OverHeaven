@@ -39,7 +39,7 @@ final class GlProgram implements AutoCloseable {
     private static String source(String file) throws java.io.IOException {
         try (var reader = Minecraft.getInstance().getResourceManager().openAsReader(new ResourceLocation(FoliageCompat.MOD_ID, "shaders/blackhole/" + file))) {
             String source = reader.lines().collect(java.util.stream.Collectors.joining("\n"));
-            for(String include:new String[]{"schwarzschild.glsl","thermal.glsl","kerr.glsl","finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl","finale_star_style.glsl","composite_light.glsl","reconstruct.glsl","solution_bounds.glsl"}) {
+            for(String include:new String[]{"schwarzschild.glsl","thermal.glsl","kerr.glsl","finale_remnant.glsl","finale_cosmos.glsl","finale_energy.glsl","singularity_glare.glsl","finale_sky_common.glsl","finale_star_style.glsl","composite_light.glsl","reconstruct.glsl","solution_bounds.glsl","illusion_tp_common.glsl"}) {
                 String directive="#include \""+include+"\"";
                 if(source.contains(directive)) source=source.replace(directive,source(include));
             }

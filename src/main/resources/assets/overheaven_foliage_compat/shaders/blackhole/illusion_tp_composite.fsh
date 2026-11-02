@@ -1,67 +1,54 @@
 #version 330 core
-uniform sampler2D Scene;
-uniform sampler2D SceneDepth;
-uniform sampler2D HandMask;
-uniform mat4 InverseVP;
-uniform vec3 Eye;
-uniform vec2 PixelSize;
-uniform float Horizon;
-uniform float Radius;
-uniform float Progress;
-// Time scale, initial rate, ramp duration (seconds), local depth fade duration (seconds).
-uniform vec4 WaveTiming;
-uniform int HasHand;
-uniform int Reveal;
-uniform int ForceCovered;
-uniform int Complete;
-uniform int CoverageOnly;
-in vec2 texCoord;
+#include "illusion_tp_common.glsl"
+uniform sampler2D SortedIndices;
 out vec4 fragColor;
 
-// This pass runs after the host display conversion; do not apply another gamma/exposure curve.
-const vec3 COVER = vec3(36.0 / 255.0);
-float handAt(vec2 uv) {
-    return HasHand != 0 ? texture(HandMask, clamp(uv, PixelSize * 0.5, 1.0 - PixelSize * 0.5)).r : 0.0;
+vec3 sortedSceneAt(vec2 uv, vec3 fallback) {
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThanEqual(uv, vec2(1.0)))) return fallback;
+    ivec2 p = ivec2(floor(uv / PixelSize));
+    vec2 center = (vec2(p) + 0.5) * PixelSize;
+    float depth = texelFetch(SceneDepth, p, 0).r;
+    float distance = waveDistanceAt(center, depth);
+    if (protectedHandAt(center) > 0.0 || glitchStrengthAt(center, distance, depth) <= 0.0) return fallback;
+    int record = int(texelFetch(SortedIndices, p, 0).r);
+    int strip = record / 128;
+    if ((strip & 1) != 0) return blockSceneAt(center, fallback);
+    // Each ordered pixel retains exactly one source RGB, rather than stretching or repeating a color.
+    int originalX = (p.x / 128) * 128 + (record & 127);
+    return blockSceneAt((vec2(originalX, p.y) + 0.5) * PixelSize, fallback);
 }
-vec3 sceneAt(vec2 uv, vec3 fallback) {
-    uv = clamp(uv, PixelSize * 0.5, 1.0 - PixelSize * 0.5);
-    // A displaced world sample must not pull the protected hand into the scan band.
-    return handAt(uv) > 0.0 ? fallback : texture(Scene, uv, -10.0).rgb;
+vec3 glitchSceneAt(vec2 uv, vec3 fallback) {
+    vec3 displaced = blockSceneAt(uv, fallback);
+    // Sort first, then tear/split this image. An excluded sorting pixel still keeps its displacement.
+    return mix(displaced, sortedSceneAt(uv, displaced), 0.70);
 }
-vec3 reconstruct(vec2 uv, float depth) {
-    vec4 position = InverseVP * vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
-    return position.xyz / position.w;
-}
-// Display-space greys: geometry distance controls brightness, not the scene texture or raw depth.
-vec3 depthCover(float depth) {
-    if (depth >= 1.0) return COVER;
-    float blocks = length(reconstruct(texCoord, depth) - Eye);
-    float strength = exp2(-blocks / 32.0);
-    return mix(COVER, vec3(112.0 / 255.0), strength);
-}
-float waveDistance(float depth) {
-    if (depth < 1.0) return length(reconstruct(texCoord, depth) - Eye) / 16.0;
-    // Sky has no surface depth: scan from the world horizon towards the zenith.
-    vec3 ray = normalize(reconstruct(texCoord, 0.5) - Eye);
-    float elevation = asin(clamp(ray.y, 0.0, 1.0)) / 1.57079632679;
-    return Horizon * (1.0 + elevation);
-}
-// Invert the exact CPU ramp to obtain this surface's scan timestamp.
-// Once the ramp ends the inverse is analytic; only early hits need bounded bisection.
-float scanTimestamp(float distance) {
-    float target = sqrt(max(distance, 0.0)) / WaveTiming.x;
-    float initial = WaveTiming.y;
-    float ramp = WaveTiming.z;
-    float rampEnd = ramp * (initial + (1.0 - initial) * 0.5);
-    if (target >= rampEnd) return target + ramp * (1.0 - initial) * 0.5;
-    float lo = 0.0, hi = ramp;
-    for (int i = 0; i < 14; ++i) {
-        float mid = (lo + hi) * 0.5;
-        float u = mid / ramp;
-        float accumulated = initial * mid + (1.0 - initial) * ramp * (u*u*u - 0.5*u*u*u*u);
-        if (accumulated < target) lo = mid; else hi = mid;
-    }
-    return (lo + hi) * 0.5;
+vec3 blockGlitch(float age, vec3 original) {
+    float envelope = glitchEnvelope(age);
+    if (envelope <= 0.0) return original;
+    float strength = envelope * glitchShape(texCoord);
+    if (strength <= 0.0) return original;
+    float impact = smoothstep(0.0, 0.65, strength);
+    vec2 p = glitchPixel(texCoord);
+    uint seed = glitchSlice();
+    float time = Progress / WaveTiming.x;
+    // Broad scanline tears and coarse jumps remain visible even when the noise waves cross zero.
+    float wave = (glitchNoise(vec2(p.y / 63.0, time * 12.0), 101u) * 2.0 - 1.0)
+        * (glitchNoise(vec2(p.y / 29.0, time * 21.0), 211u) * 2.0 - 1.0) * 260.0;
+    float row = glitchRandom(uvec3(uint(p.y / 12.0), 47u, seed));
+    float tear = abs(row - 0.5) > 0.18 ? (row - 0.5) * 480.0 : 0.0;
+    float jumpNoise = glitchNoise(p / vec2(230.0, 150.0), seed + 61u);
+    float jump = (row < 0.5 ? -1.0 : 1.0) * (45.0 + 110.0 * jumpNoise);
+    vec2 unit = vec2(PixelSize.x / PixelSize.y, 1.0) / 1080.0;
+    vec2 displaced = texCoord + vec2(wave + tear + jump, (row - 0.5) * 36.0) * unit * impact;
+    vec2 split = vec2(20.0 + 44.0 * abs(row - 0.5) * 2.0, (row - 0.5) * 14.0) * unit * impact;
+    vec3 localSorted = sortedSceneAt(texCoord, original);
+    vec3 color = vec3(glitchSceneAt(displaced + split, localSorted).r,
+        glitchSceneAt(displaced, localSorted).g, glitchSceneAt(displaced - split, localSorted).b);
+    uvec3 grainSeed = uvec3(uvec2(p), uint(time * 30.0) + uint(Reveal) * 7919u);
+    vec3 grain = vec3(glitchRandom(grainSeed), glitchRandom(grainSeed + uvec3(17u,3u,5u)),
+        glitchRandom(grainSeed + uvec3(7u,19u,11u))) - 0.5;
+    color += grain * 0.025 * impact;
+    return mix(original, max(color, vec3(0.0)), impact);
 }
 // DepthTestPostEffect reference: retain its strip displacement, timing and 20-sample spectrum.
 float sat(float t) { return clamp(t, 0.0, 1.0); }
@@ -112,9 +99,7 @@ vec3 glitch(float strength, bool greySample, vec3 fallback) {
 void main() {
     vec4 original = texture(Scene, texCoord);
     // Keep a one-pixel fringe for the hand's antialiased silhouette.
-    float hand = max(handAt(texCoord), max(max(handAt(texCoord + vec2(PixelSize.x, 0.0)),
-        handAt(texCoord - vec2(PixelSize.x, 0.0))), max(handAt(texCoord + vec2(0.0, PixelSize.y)),
-        handAt(texCoord - vec2(0.0, PixelSize.y)))));
+    float hand = protectedHandAt(texCoord);
     if (hand > 0.0) {
         if (CoverageOnly != 0) discard;
         fragColor = original; return;
@@ -123,7 +108,7 @@ void main() {
     // Completion is latched only after the wave AND its fading tail have cleared the view.
     if (Complete != 0) { fragColor = Reveal != 0 ? original : vec4(COVER, 1.0); return; }
     float depth = texture(SceneDepth, texCoord).r;
-    float distance = waveDistance(depth);
+    float distance = waveDistanceAt(texCoord, depth);
     // The local deadline is hitTime + duration, never a whole-screen phase deadline.
     float hitTime = scanTimestamp(distance);
     float elapsed = Progress / WaveTiming.x;
@@ -136,9 +121,9 @@ void main() {
     float width = length(PixelSize) * 24.0;
     const float widthMultiplier = 4.5;
     if (CoverageOnly != 0) {
-        // A covered surface is not ready for teleport while its depth silhouette is still fading.
-        bool depthFaded = age >= WaveTiming.w;
-        if (offset <= -width * widthMultiplier && depthFaded) discard;
+        // Wait for the whole local tail, even if this random slice contains no active block.
+        float settledAge = WaveTiming.w + (Reveal != 0 ? BlockGlitchSeconds : 0.0);
+        if (offset <= -width * widthMultiplier && age >= settledAge) discard;
         fragColor = vec4(0.0); return;
     }
     // In reveal the bright/glitch edge is delayed until the local depth fade-in has finished.
@@ -153,6 +138,8 @@ void main() {
             float strength = (distance - width) / width / (widthMultiplier - 1.0) * 0.4;
             color = glitch(strength, !visible, original.rgb);
         }
+    } else if (visible && depth < 1.0) {
+        color = blockGlitch(age, original.rgb);
     }
     fragColor = vec4(color, 1.0);
 }
