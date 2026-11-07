@@ -1,0 +1,350 @@
+[
+  {
+    "path": "/lib/lighting/mainLighting.glsl",
+    "find": "color.rgb *= finalDiffuse;",
+    "replace": "color.rgb = ohLitMaterial(color.rgb, finalDiffuse, lightHighlight);",
+    "count": 1
+  },
+  {
+    "path": "/lib/lighting/mainLighting.glsl",
+    "find": "color.rgb += lightHighlight;",
+    "replace": "// Highlight is included once in ohLitMaterial.",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialMethods/worldSpaceRef.glsl",
+    "find": "return vec4(color.rgb * lighting + maRecolor, alphaFade);",
+    "replace": "return vec4(ohLitMaterial(color.rgb, lighting, maRecolor), alphaFade);",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialMethods/worldSpaceRef.glsl",
+    "find": "return vec4(albedo * lighting, alphaFade);",
+    "replace": "return vec4(ohLitMaterial(albedo, lighting, vec3(0.0)), alphaFade);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_water.glsl",
+    "find": "translucentMult.rgb = mix(translucentMult.rgb, vec3(1.0), min1(pow2(pow2(lViewPos / far))));",
+    "replace": "translucentMult.rgb = mix(translucentMult.rgb, vec3(1.0), min1(pow2(pow2(lViewPos / far))));\ntranslucentMult.rgb = ohLossSrgb(translucentMult.rgb);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_armor_glint.glsl",
+    "find": "gl_FragData[0] = color;",
+    "replace": "gl_FragData[0] = vec4(ohLossSrgb(color.rgb), color.a);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_spidereyes.glsl",
+    "find": "gl_FragData[0] = color;",
+    "replace": "gl_FragData[0] = vec4(ohLossSrgb(color.rgb), color.a);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_lightning.glsl",
+    "find": "gl_FragData[0] = color;",
+    "replace": "gl_FragData[0] = vec4(ohLossSrgb(color.rgb), color.a);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_skytextured.glsl",
+    "find": "gl_FragData[0] = color;",
+    "replace": "gl_FragData[0] = vec4(ohLossSrgb(color.rgb), color.a);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_damagedblock.glsl",
+    "find": "gl_FragData[0] = color;",
+    "replace": "gl_FragData[0] = vec4(ohLossSrgb(color.rgb), color.a);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_clouds.glsl",
+    "find": "gl_FragData[0] = color;",
+    "replace": "gl_FragData[0] = vec4(ohLossSrgb(color.rgb), color.a);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_clouds.glsl",
+    "find": "gl_FragData[2] = vec4(1.0 - translucentMult.rgb, translucentMult.a);",
+    "replace": "gl_FragData[2] = vec4(1.0 - ohLossSrgb(translucentMult.rgb), translucentMult.a);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_beaconbeam.glsl",
+    "find": "float prevAlpha = color.a;",
+    "replace": "color.rgb = ohLossSrgb(color.rgb);\nfloat prevAlpha = color.a;",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_weather.glsl",
+    "find": "color.rgb = sqrt3(color.rgb) * (blocklightCol * 2.0 * lmCoord.x + (ambientColor + 0.2 * lightColor) * lmCoord.y * (0.6 + 0.3 * sunFactor));",
+    "replace": "color.rgb = ohLitMaterial(sqrt3(color.rgb), blocklightCol * 2.0 * lmCoord.x + (ambientColor + 0.2 * lightColor) * lmCoord.y * (0.6 + 0.3 * sunFactor), vec3(0.0));",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/sky.glsl",
+    "find": "return finalSky;",
+    "replace": "return ohLossSrgb(finalSky);",
+    "count": 2
+  },
+  {
+    "path": "/lib/atmospherics/stars.glsl",
+    "find": "return 40.0 * star * vec3(0.38, 0.4, 0.5);",
+    "replace": "return ohLossSrgb(40.0 * star * vec3(0.38, 0.4, 0.5));",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/enderStars.glsl",
+    "find": "return enderStars * END_STAR_INTENSITY;",
+    "replace": "return ohLossSrgb(enderStars * END_STAR_INTENSITY);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/auroraBorealis.glsl",
+    "find": "return aurora * visibility / sampleCount;",
+    "replace": "return ohLossSrgb(aurora * visibility / sampleCount);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/nightNebula.glsl",
+    "find": "return max(nebulaTexture.rgb * nebulaTexture.a, vec3(0.0));",
+    "replace": "return ohLossSrgb(max(nebulaTexture.rgb * nebulaTexture.a, vec3(0.0)));",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_skybasic.glsl",
+    "find": "vec4 color = vec4(glColor.rgb, 1.0);",
+    "replace": "vec4 color = vec4(ohLossSrgb(glColor.rgb), 1.0);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_skybasic.glsl",
+    "find": "color.rgb = mix(color.rgb, vec3(0.9, 0.5, 0.3) * 25.0, sunMoonMixer);",
+    "replace": "color.rgb = mix(color.rgb, ohLossSrgb(vec3(0.9, 0.5, 0.3) * 25.0), sunMoonMixer);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_skybasic.glsl",
+    "find": "color.rgb = mix(color.rgb, moonColor, sunMoonMixer);",
+    "replace": "color.rgb = mix(color.rgb, ohLossSrgb(moonColor), sunMoonMixer);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/mainFog.glsl",
+    "find": "vec3 fogColorM = netherColor;",
+    "replace": "vec3 fogColorM = ohLossSrgb(netherColor);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/mainFog.glsl",
+    "find": "vec3 fogColorM = endSkyColor;",
+    "replace": "vec3 fogColorM = ohLossSrgb(endSkyColor);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/mainFog.glsl",
+    "find": "vec3 fogColorM = GetAtmFogColor(altitudeFactorRaw, VdotS);",
+    "replace": "vec3 fogColorM = ohLossSrgb(GetAtmFogColor(altitudeFactorRaw, VdotS));",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/mainFog.glsl",
+    "find": "vec3 fogColorM = endSkyColor * 1.5;",
+    "replace": "vec3 fogColorM = ohLossSrgb(endSkyColor * 1.5);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/mainFog.glsl",
+    "find": "color = mix(color, vec4(caveFogColor, 0.0), fog);",
+    "replace": "color = mix(color, vec4(ohLossSrgb(caveFogColor), 0.0), fog);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/mainFog.glsl",
+    "find": "color = mix(color, vec4(waterFogColor, 0), fog);",
+    "replace": "color = mix(color, vec4(ohLossSrgb(waterFogColor), 0), fog);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/mainFog.glsl",
+    "find": "color = mix(color, vec4(fogColor * 5.0, 0.0), fog);",
+    "replace": "color = mix(color, vec4(ohLossSrgb(fogColor * 5.0), 0.0), fog);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/mainFog.glsl",
+    "find": "color = mix(color, vec4(fogColor, 0.0), fog);",
+    "replace": "color = mix(color, vec4(ohLossSrgb(fogColor), 0.0), fog);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/clouds/unboundClouds.glsl",
+    "find": "colorSample = mix(cloudSkyColor, colorSample, cloudFogFactor * 0.69);",
+    "replace": "colorSample = mix(cloudSkyColor, ohLossSrgb(colorSample), cloudFogFactor * 0.69);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/clouds/reimaginedClouds.glsl",
+    "find": "colorSample = mix(cloudSkyColor, colorSample, cloudFogFactor * 0.707);",
+    "replace": "colorSample = mix(cloudSkyColor, ohLossSrgb(colorSample), cloudFogFactor * 0.707);",
+    "count": 1
+  },
+  {
+    "path": "/program/deferred1.glsl",
+    "find": "color.rgb = netherColor * (1.0 - maxBlindnessDarkness);",
+    "replace": "color.rgb = ohLossSrgb(netherColor) * (1.0 - maxBlindnessDarkness);",
+    "count": 1
+  },
+  {
+    "path": "/program/deferred1.glsl",
+    "find": "color.rgb = endSkyColor;",
+    "replace": "color.rgb = ohLossSrgb(endSkyColor);",
+    "count": 1
+  },
+  {
+    "path": "/program/deferred1.glsl",
+    "find": "vec3 atmFogColor = GetAtmFogColor(altitudeFactorRaw, VdotS);",
+    "replace": "vec3 atmFogColor = ohLossSrgb(GetAtmFogColor(altitudeFactorRaw, VdotS));",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialMethods/reflectionBackground.glsl",
+    "find": "skyReflection += specularHighlight * highlightColor * shadowMult * highlightMult * invRainFactor;",
+    "replace": "skyReflection += ohLossSrgb(specularHighlight * highlightColor * shadowMult * highlightMult * invRainFactor);",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialMethods/reflectionBackground.glsl",
+    "find": "vec3 skyReflection = (endSkyColor + enderStars + volumetricEffect.rgb) * skyLightFactor;",
+    "replace": "vec3 skyReflection = (ohLossSrgb(endSkyColor) + enderStars + volumetricEffect.rgb) * skyLightFactor;",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialMethods/reflectionBackground.glsl",
+    "find": "vec3 skyReflection = endSkyColor * skyLightFactor;",
+    "replace": "vec3 skyReflection = ohLossSrgb(endSkyColor) * skyLightFactor;",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/coloredLightFog.glsl",
+    "find": "vec3 lightSample = lightVolume.rgb;",
+    "replace": "vec3 lightSample = lightVolume.rgb;\nif (any(greaterThan(ohColorLossResidual, vec3(0.0)))) lightSample = pow(ohLossSrgb(pow(max(lightSample, vec3(0.0)), vec3(0.25))), vec3(4.0));",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/coloredLightFog.glsl",
+    "find": "lightFog *= netherColor * 5.0;",
+    "replace": "lightFog *= ohLossSrgb(netherColor * 5.0);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/volumetricLight/volumetricLight.glsl",
+    "find": "localDensity = pow2(shadowColorSample) * vlColorReducer;",
+    "replace": "localDensity = ohLossLinear(pow2(shadowColorSample) * vlColorReducer);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/volumetricLight/volumetricLight.glsl",
+    "find": "volumetricLight.rgb *= vlColor;",
+    "replace": "volumetricLight.rgb *= ohLossLinear(vlColor);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/volumetricLight/volumetricLight.glsl",
+    "find": "volumetricLight.rgb = mix(volumetricLight.rgb, vec3(GetLuminance(volumetricLight.rgb)) * vec3(1.0, 1.0, 0.5), inSulfurCaves);",
+    "replace": "volumetricLight.rgb = mix(volumetricLight.rgb, vec3(GetLuminance(volumetricLight.rgb)) * ohLossLinear(vec3(1.0, 1.0, 0.5)), inSulfurCaves);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/volumetricLight/enderBeams.glsl",
+    "find": "return beams;",
+    "replace": "return ohLossLinear(beams);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/netherStorm.glsl",
+    "find": "netherStorm.rgb *= netherColor * 3.0 * (1.0 - maxBlindnessDarkness);",
+    "replace": "netherStorm.rgb *= ohLossSrgb(netherColor * 3.0) * (1.0 - maxBlindnessDarkness);",
+    "count": 1
+  },
+  {
+    "path": "/program/composite1.glsl",
+    "find": "vec3 underwaterMult = vec3(0.80, 0.87, 0.97);",
+    "replace": "vec3 underwaterMult = ohLossSrgb(vec3(0.80, 0.87, 0.97));",
+    "count": 1
+  },
+  {
+    "path": "/program/composite1.glsl",
+    "find": "if (z1 == 1.0) color.rgb = fogColor * 5.0;",
+    "replace": "if (z1 == 1.0) color.rgb = ohLossSrgb(fogColor * 5.0);",
+    "count": 1
+  },
+  {
+    "path": "/program/composite1.glsl",
+    "find": "rainColor *= blocklightCol * 2.0 * blocklight + (ambientColor + 0.2 * lightColor) * (0.6 + 0.3 * sunFactor);",
+    "replace": "rainColor = ohLitMaterial(rainColor, blocklightCol * 2.0 * blocklight + (ambientColor + 0.2 * lightColor) * (0.6 + 0.3 * sunFactor), vec3(0.0));",
+    "count": 1
+  },
+  {
+    "path": "/lib/misc/lensFlare.glsl",
+    "find": "color = mix(color, vec3(1.0), flare);",
+    "replace": "color = mix(color, vec3(1.0), ohLossSrgb(flare));",
+    "count": 1
+  },
+  {
+    "path": "/lib/antialiasing/taa.glsl",
+    "find": "void DoTAA(inout vec3 color, inout vec3 temp, float z1) {",
+    "replace": "void DoTAA(inout vec3 color, inout vec3 temp, float z1) {\n    if (ohColorLossResetHistory) { temp = color; return; }",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_terrain.glsl",
+    "find": "color.rgb += maRecolor;",
+    "replace": "color.rgb += ohLossSrgb(maRecolor);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_entities.glsl",
+    "find": "color.rgb += maRecolor;",
+    "replace": "color.rgb += ohLossSrgb(maRecolor);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_hand.glsl",
+    "find": "color.rgb += maRecolor;",
+    "replace": "color.rgb += ohLossSrgb(maRecolor);",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialHandling/deferredIPBR.glsl",
+    "find": "reflectColor = mix(vec3(0.5, 0.75, 0.5), vec3(1.0, 0.45, 0.3), sqrt1(smoothnessD));",
+    "replace": "reflectColor = ohLossSrgb(mix(vec3(0.5, 0.75, 0.5), vec3(1.0, 0.45, 0.3), sqrt1(smoothnessD)));",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialHandling/deferredIPBR.glsl",
+    "find": "reflectColor = vec3(1.0, 0.8, 0.5);",
+    "replace": "reflectColor = ohLossSrgb(vec3(1.0, 0.8, 0.5));",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialHandling/deferredIPBR.glsl",
+    "find": "reflectColor = vec3(1.0, 0.3, 0.2);",
+    "replace": "reflectColor = ohLossSrgb(vec3(1.0, 0.3, 0.2));",
+    "count": 1
+  },
+  {
+    "path": "/program/composite.glsl",
+    "find": "reflectOutput.rgb = mix(prevRef.rgb, reflectOutput.rgb, min1(minBlendFactor / prevValid));",
+    "replace": "if (!ohColorLossResetHistory) reflectOutput.rgb = mix(prevRef.rgb, reflectOutput.rgb, min1(minBlendFactor / prevValid));",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/rainbow.glsl",
+    "find": "rainbow = pow(rainbow, vec3(2.2)) * vec3(0.25, 0.075, 0.25) * 3.0;",
+    "replace": "rainbow = pow(rainbow, vec3(2.2)) * vec3(0.25, 0.075, 0.25) * 3.0;\nrainbow = ohLossSrgb(rainbow);",
+    "count": 1
+  }
+]

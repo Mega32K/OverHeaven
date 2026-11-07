@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.mega.overheaven.foliagecompat.colorloss.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "overheaven_foliage_compat.refmap.json",
+  "client": [
+    "GameRendererMixin",
+    "OculusShaderPackMixin",
+    "OculusCommonUniformsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "plugin": "com.mega.overheaven.foliagecompat.colorloss.ColorLossMixinPlugin"
+}

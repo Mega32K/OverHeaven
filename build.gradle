@@ -23,7 +23,7 @@ minecraft {
     copyIdeResources = true
     runs {
         configureEach {
-            workingDirectory project.file('run')
+            workingDirectory project.file(project.providers.gradleProperty('overheavenRunDirectory').getOrElse('run'))
             mods { "${mod_id}" { source sourceSets.main } }
         }
         client { }
@@ -37,6 +37,8 @@ mixin {
     config "${mod_id}.blackhole.mixins.json"
     config "${mod_id}.finale.mixins.json"
     config "${mod_id}.illusiontp.mixins.json"
+    config "${mod_id}.colorloss.mixins.json"
+    config "${mod_id}.worldwarp.mixins.json"
 }
 repositories {
     maven { url = 'https://maven.minecraftforge.net/' }
@@ -48,6 +50,11 @@ repositories {
         name = 'Modrinth'
         url = 'https://api.modrinth.com/maven'
         content { includeGroup 'maven.modrinth' }
+    }
+    maven {
+        name = 'CurseMaven'
+        url = 'https://www.cursemaven.com'
+        content { includeGroup 'curse.maven' }
     }
     mavenCentral()
 }
@@ -71,6 +78,8 @@ dependencies {
     implementation fg.deobf(oculusDependency)
     // Oculus requires Embeddium in the development runtime; Modrinth POMs omit this dependency.
     runtimeOnly fg.deobf('maven.modrinth:embeddium:UTbfe5d1') // 0.3.31+mc1.20.1
+    // Reserve Mixin's generated Args package in Forge's game module layer (Mixin issue #494).
+    runtimeOnly fg.deobf('curse.maven:mixin-args-1257105:6488404') // Mixin Args 1.0, Java 17
     implementation fg.deobf('maven.modrinth:endinglibrary:KwxldfZc')
     implementation fg.deobf('maven.modrinth:geckolib:LwI6czff') // Forge 1.20.1, GeckoLib 4.7
     compatibilityArtifacts swayDependency
@@ -93,7 +102,7 @@ tasks.named('processResources', ProcessResources).configure {
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props }
 }
 tasks.named('jar', Jar).configure {
-    manifest { attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}.blackhole.mixins.json,${mod_id}.finale.mixins.json,${mod_id}.illusiontp.mixins.json", 'Implementation-Version': mod_version) }
+    manifest { attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}.blackhole.mixins.json,${mod_id}.finale.mixins.json,${mod_id}.illusiontp.mixins.json,${mod_id}.colorloss.mixins.json,${mod_id}.worldwarp.mixins.json", 'Implementation-Version': mod_version) }
     finalizedBy 'reobfJar'
 }
 tasks.withType(JavaCompile).configureEach {

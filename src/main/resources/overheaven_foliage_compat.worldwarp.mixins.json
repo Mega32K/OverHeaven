@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.mega.overheaven.foliagecompat.worldwarp.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "overheaven_foliage_compat.refmap.json",
+  "plugin": "com.mega.overheaven.foliagecompat.worldwarp.WorldWarpMixinPlugin",
+  "client": [
+    "LevelRendererMixin", "FrustumMixin", "EmbeddiumViewportMixin", "EmbeddiumFacesMixin",
+    "EmbeddiumSectionMixin", "EmbeddiumManagerMixin", "EmbeddiumSortStateMixin",
+    "EmbeddiumSorterMixin", "EmbeddiumSortTaskMixin", "EmbeddiumBufferMixin",
+    "EmbeddiumMeshingTaskMixin", "EmbeddiumBuildOutputMixin", "EmbeddiumAnalyzerMixin", "EmbeddiumCullerMixin",
+    "RenderTypeMixin", "OculusSortingMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

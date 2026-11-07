@@ -66,7 +66,7 @@ $env:JAVA_HOME = 'C:\Users\Administrator\.jdks\ms-17.0.18'
 .\gradlew.bat build
 ```
 
-依赖通过 Modrinth Maven 获取，并由 ForgeGradle 重映射，使用固定版本 ID：
+依赖通过 Modrinth Maven 与限定 `curse.maven` 组的 CurseMaven 获取，并由 ForgeGradle 重映射，使用固定发布 ID：
 
 | 模组 | 发布版本 | Maven 版本 ID | 声明 |
 | --- | --- | --- | --- |
@@ -74,9 +74,14 @@ $env:JAVA_HOME = 'C:\Users\Administrator\.jdks\ms-17.0.18'
 | Interactive Foliage | 2.2.0-forge+1.20.1 | `M4DdktEm` | `implementation fg.deobf(...)` |
 | Oculus | 1.20.1-1.8.0 | `iQ1SwGc3` | `implementation fg.deobf(...)` |
 | Embeddium | 0.3.31+mc1.20.1 | `UTbfe5d1` | `runtimeOnly fg.deobf(...)`，满足 Oculus 开发运行依赖 |
+| Mixin Args | 1.0 / Java 17 | CurseForge 文件 `6488404` | `runtimeOnly fg.deobf('curse.maven:mixin-args-1257105:6488404')`，修复 Mixin 动态 Args 类在 Forge 模块层中的加载 |
 | GeckoLib | Forge 1.20.1 / 4.7 | `LwI6czff` | `implementation fg.deobf(...)`，奶蛋方块必需前置，两端安装 |
 
 构建无需本机游戏实例或手动准备依赖 JAR；首次构建需要联网下载，缓存完整后可使用 `--offline`。已移除实例目录扫描及本地 JAR 路径参数。字节码验证通过独立 Gradle configuration 获取相同远程坐标的原始工件，开发编译/运行使用 FG 重映射后的工件。标准 `implementation`/`runtimeOnly` 声明不会将第三方模组打入本模组 JAR。
+
+当前 Forge / Mixin 组合需要 Mixin Args 为 `org.spongepowered.asm.synthetic.args` 保留游戏模块包，避免 Oculus 及 worldWarp 的 `@ModifyArgs` 在进入世界时出现 `NoClassDefFoundError: Args$…`。该修复包只包含包占位类，不替换 Mixin、Oculus 或 Embeddium；在此组合的发行环境中也需单独安装 Mixin Args 1.0，开发运行由 Gradle 自动提供。上游说明见 [Mixin Args](https://www.curseforge.com/minecraft/mc-mods/mixin-args) 与 [Mixin #494](https://github.com/SpongePowered/Mixin/issues/494)。
+
+开发客户端默认使用 `run/`。验证时可传入 `-PoverheavenRunDirectory=<独立目录>`，并在该目录中使用配置和存档副本；游戏日志、崩溃记录和存档写入均位于此目录，避免原日志被轮转。此参数只改变开发运行目录，不影响构建产物。
 
 正常 Java 代码由 ForgeGradle reobfJar 重映射。植物 Mixin 与 Oculus Mixin 的稳定外部符号明确 remap=false；新增原版渲染注入通过共享 refmap 重映射，发行包核对 renderLevel 的生产选择器 m_109599_。补丁不使用 MixinExtras。
 
@@ -93,6 +98,14 @@ $env:JAVA_HOME = 'C:\Users\Administrator\.jdks\ms-17.0.18'
 ```
 
 完整调用流程、缓存时机、根因证据与验收矩阵见 [调查记录](docs/INVESTIGATION.md) 和 [验证记录](docs/VALIDATION.md)。原 MDK 文件副本、反编译资料和本地构建日志保存在被 Git 忽略的 `audit/` 中。工作区最初没有 Git 仓库，本次未创建提交、分支或推送。
+
+## CN3999 失色
+
+`/colorLoss global all 1 5` 在 5 秒内褪为黑白；`/colorLoss global color R 1 3` 消除红色系，另支持 G／B；`/colorLoss global restore 3` 恢复原色。Oculus 1.8.0 + Complementary Unbound r5.9.3 使用内存源码适配，分别处理材质、照明与独立特效贡献，让泥土保留棕色、红光独立失色，泛光继承处理后的来源。RGB 混合色按两项最小值联动，三项同值等价于全画面统一失色。保留宿主显示转换、后处理链、玩家覆盖及渐变；不兼容的光影使用最终画面近似模式。旧曲线自动迁移为三项 RGB，网络协议升级为 2，客户端与服务端须匹配。完整命令与边界见 [失色系统](docs/COLOR_LOSS.md)。
+
+## 固定轴世界扭转
+
+`/worldWarp @s start ~ ~1.6 ~ 0 0` 开启固定朝 +Z 的远景扭转；`/worldWarp @s followEyes 0 0` 让轴心和距离基准跟随玩家眼部位置，轴向保持固定，第三人称/演出相机不会带动基准。默认强度 1、25 秒完整往复；`/worldWarp @s stop` 用 1 秒淡出，`stop 0` 立即关闭。支持目标玩家、yaw/pitch、强度与周期参数。限已核对的 Oculus 1.8.0 + Embeddium 0.3.31 + Complementary Unbound r5.9.3，和 Color Loss 组合适配；仅改变显示，离开执行维度清除。worldWarp 网络协议为 2，客户端与服务端需同步更新。命令、版本边界和开销说明见 [worldWarp](docs/WORLD_WARP.md)。
 
 ## 奶蛋方块
 

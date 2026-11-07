@@ -3,6 +3,9 @@ package com.mega.overheaven.foliagecompat;
 import com.google.gson.JsonParser;
 import com.mega.overheaven.foliagecompat.compat.SwayModelContract;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.jar.JarFile;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
@@ -28,15 +31,36 @@ public final class ArtifactVerification {
             check(config.get("plugin").getAsString().endsWith("FoliageCompatMixinPlugin"), "optional guard plugin");
             var refmap = JsonParser.parseString(text(jar, "overheaven_foliage_compat.refmap.json")).getAsJsonObject();
             check(refmap.get("mappings").isJsonObject(), "generated refmap must be parseable (stable remap=false selectors may be empty)");
-            check(jar.getManifest().getMainAttributes().getValue("MixinConfigs").equals("overheaven_foliage_compat.mixins.json,overheaven_foliage_compat.blackhole.mixins.json"), "Forge Mixin manifest registration");
+            String registered=jar.getManifest().getMainAttributes().getValue("MixinConfigs");
+            check(registered!=null,"Forge Mixin manifest registration present");
+            String[] names=registered.split(",",-1);
+            Set<String> configs=new LinkedHashSet<>(Arrays.asList(names));
+            check(configs.size()==names.length,"no duplicate Mixin registrations");
+            check(configs.equals(Set.of("overheaven_foliage_compat.mixins.json",
+                    "overheaven_foliage_compat.blackhole.mixins.json","overheaven_foliage_compat.finale.mixins.json",
+                    "overheaven_foliage_compat.illusiontp.mixins.json","overheaven_foliage_compat.colorloss.mixins.json",
+                    "overheaven_foliage_compat.worldwarp.mixins.json")),"all current Forge Mixin registrations");
+            for(String name:configs) {
+                var registeredConfig=JsonParser.parseString(text(jar,name)).getAsJsonObject();
+                check(jar.getJarEntry(registeredConfig.get("refmap").getAsString())!=null,"registered Mixin refmap packaged "+name);
+                if(registeredConfig.has("plugin"))check(jar.getJarEntry(registeredConfig.get("plugin").getAsString().replace('.','/')+".class")!=null,"registered Mixin plugin packaged "+name);
+                String prefix=registeredConfig.get("package").getAsString().replace('.','/')+"/";
+                for(String side:new String[]{"mixins","client","server"})if(registeredConfig.has(side))
+                    for(var mixin:registeredConfig.getAsJsonArray(side))check(jar.getJarEntry(prefix+mixin.getAsString().replace('.','/')+".class")!=null,"registered Mixin class packaged "+mixin.getAsString());
+            }
             var blackHoleConfig=JsonParser.parseString(text(jar,"overheaven_foliage_compat.blackhole.mixins.json")).getAsJsonObject();
-            check(blackHoleConfig.getAsJsonArray("client").size()==6 && !blackHoleConfig.has("mixins"),"black hole rendering mixins client-only");
+            Set<String> blackHoleMixins=new LinkedHashSet<>();
+            for(var mixin:blackHoleConfig.getAsJsonArray("client"))blackHoleMixins.add(mixin.getAsString());
+            check(blackHoleConfig.getAsJsonArray("client").size()==blackHoleMixins.size()
+                    && blackHoleMixins.equals(Set.of("LevelRendererMixin","MinecraftMixin","OculusPipelineMixin",
+                        "OculusCompositeMixin","OculusQuadMixin","OculusProgramMixin","OculusIllusionPipelineMixin","OculusIllusionHandMixin"))
+                    && !blackHoleConfig.has("mixins") && !blackHoleConfig.has("server"),"black hole rendering mixins client-only");
             check(blackHoleConfig.get("plugin").getAsString().endsWith("BlackHoleMixinPlugin"),"independent Oculus guard");
             try(var texture=jar.getInputStream(jar.getJarEntry("assets/overheaven_foliage_compat/textures/blackhole/disk_detail.png"))) {
                 var image=javax.imageio.ImageIO.read(texture);
                 check(image!=null && image.getWidth()==512 && image.getHeight()==512,"original disk material packaged");
             }
-            for(String shader:new String[]{"fullscreen.vsh","copy.fsh","integrate.fsh","composite.fsh","foreground.fsh","bloom.fsh","field.glsl"}) check(!text(jar,"assets/overheaven_foliage_compat/shaders/blackhole/"+shader).isBlank(),"shader packaged "+shader);
+            for(String shader:new String[]{"fullscreen.vsh","copy.fsh","integrate.fsh","composite.fsh","foreground.fsh","subject_front.fsh","bloom.fsh","field.glsl","kerr.glsl","thermal.glsl"}) check(!text(jar,"assets/overheaven_foliage_compat/shaders/blackhole/"+shader).isBlank(),"shader packaged "+shader);
             check(JsonParser.parseString(text(jar,"assets/overheaven_foliage_compat/blackhole/presets/reference.json")).getAsJsonObject().get("schema").getAsString().equals("overheaven:blackhole/reference-v1"),"reference preset packaged");
             check(refmap.getAsJsonObject("mappings").getAsJsonObject("com/mega/overheaven/foliagecompat/blackhole/mixin/LevelRendererMixin").get("renderLevel").getAsString().contains("m_109599_"),"vanilla render hook production refmap");
             String metadata = text(jar, "META-INF/mods.toml");

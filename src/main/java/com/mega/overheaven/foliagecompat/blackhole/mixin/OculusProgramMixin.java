@@ -13,5 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class OculusProgramMixin {
     @Shadow public abstract int getProgramId();
     @Inject(method="destroyInternal()V",at=@At("HEAD"))
-    private void overheaven$deleted(CallbackInfo callback) { OculusBridge.destroyed(getProgramId()); }
+    private void overheaven$deleted(CallbackInfo callback) {
+        OculusBridge.destroyed(getProgramId());
+    }
 }

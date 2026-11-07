@@ -1,1 +1,0 @@
-[2610月2026 13:58:09.266] [main/ERROR] [OverHeaven Foliage Compat/]: Finale sky unavailable (shader pack): java.io.IOException: expected unsupported-pack test. Sky stays black; no procedural fallback while shaders are enabled.

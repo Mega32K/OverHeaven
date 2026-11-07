@@ -1,0 +1,290 @@
+[
+  {
+    "path": "/program/gbuffers_basic.glsl",
+    "find": "gl_Position = ftransform();",
+    "replace": "gl_Position = ohWarpClip(ftransform(), gbufferProjectionInverse, gbufferModelViewInverse, gl_ProjectionMatrix, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_basic.glsl",
+    "find": "vec3 playerPos = ViewToPlayer(viewPos);",
+    "replace": "vec3 playerPos = ohWarpSource(ViewToPlayer(viewPos), renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_beaconbeam.glsl",
+    "find": "gl_Position = ftransform();",
+    "replace": "gl_Position = ohWarpClip(ftransform(), gbufferProjectionInverse, gbufferModelViewInverse, gl_ProjectionMatrix, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_beaconbeam.glsl",
+    "find": "vec3 playerPos = ViewToPlayer(viewPos);",
+    "replace": "vec3 playerPos = ohWarpSource(ViewToPlayer(viewPos), renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_block.glsl",
+    "find": "gl_Position = ftransform();",
+    "replace": "gl_Position = ohWarpClip(ftransform(), gbufferProjectionInverse, gbufferModelViewInverse, gl_ProjectionMatrix, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_block.glsl",
+    "find": "vec3 playerPos = ViewToPlayer(viewPos);",
+    "replace": "vec3 playerPos = ohWarpSource(ViewToPlayer(viewPos), renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_block.glsl",
+    "find": "mat3(gbufferModelViewInverse) * normalM",
+    "replace": "ohWarpSurfaceNormal(playerPos, mat3(gbufferModelViewInverse) * normalM, renderStage)",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_damagedblock.glsl",
+    "find": "gl_Position = ftransform();",
+    "replace": "gl_Position = ohWarpClip(ftransform(), gbufferProjectionInverse, gbufferModelViewInverse, gl_ProjectionMatrix, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_entities.glsl",
+    "find": "gl_Position = ftransform();",
+    "replace": "gl_Position = ohWarpClip(ftransform(), gbufferProjectionInverse, gbufferModelViewInverse, gl_ProjectionMatrix, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_entities.glsl",
+    "find": "vec3 playerPos = ViewToPlayer(viewPos);",
+    "replace": "vec3 playerPos = ohWarpSource(ViewToPlayer(viewPos), renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_entities.glsl",
+    "find": "mat3(gbufferModelViewInverse) * normalM",
+    "replace": "ohWarpSurfaceNormal(playerPos, mat3(gbufferModelViewInverse) * normalM, renderStage)",
+    "count": 2
+  },
+  {
+    "path": "/program/gbuffers_spidereyes.glsl",
+    "find": "gl_Position = ftransform();",
+    "replace": "gl_Position = ohWarpClip(ftransform(), gbufferProjectionInverse, gbufferModelViewInverse, gl_ProjectionMatrix, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_terrain.glsl",
+    "find": "gl_Position = gl_ProjectionMatrix * gbufferModelView * position;",
+    "replace": "gl_Position = gl_ProjectionMatrix * gbufferModelView * vec4(ohWarpStage(renderStage) ? ohWarp(position.xyz) : position.xyz, position.w);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_terrain.glsl",
+    "find": "mat3(gbufferModelViewInverse) * normalM",
+    "replace": "ohWarpSurfaceNormal(playerPos, mat3(gbufferModelViewInverse) * normalM, renderStage)",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_textured.glsl",
+    "find": "gl_Position = ftransform();",
+    "replace": "gl_Position = ohWarpClip(ftransform(), gbufferProjectionInverse, gbufferModelViewInverse, gl_ProjectionMatrix, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_textured.glsl",
+    "find": "vec3 playerPos = ViewToPlayer(viewPos);",
+    "replace": "vec3 playerPos = ohWarpSource(ViewToPlayer(viewPos), renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_water.glsl",
+    "find": "gl_Position = gl_ProjectionMatrix * gbufferModelView * position;",
+    "replace": "gl_Position = gl_ProjectionMatrix * gbufferModelView * vec4(ohWarpStage(renderStage) ? ohWarp(position.xyz) : position.xyz, position.w);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_water.glsl",
+    "find": "mat3(gbufferModelViewInverse) * normalM",
+    "replace": "ohWarpSurfaceNormal(playerPos, mat3(gbufferModelViewInverse) * normalM, renderStage)",
+    "count": 2
+  },
+  {
+    "path": "/program/gbuffers_weather.glsl",
+    "find": "gl_Position = gl_ProjectionMatrix * gbufferModelView * position;",
+    "replace": "gl_Position = gl_ProjectionMatrix * gbufferModelView * vec4(ohWarpStage(renderStage) ? ohWarp(position.xyz) : position.xyz, position.w);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_armor_glint.glsl",
+    "find": "gl_Position = ftransform();",
+    "replace": "gl_Position = ohWarpClip(ftransform(), gbufferProjectionInverse, gbufferModelViewInverse, gl_ProjectionMatrix, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_basic.glsl",
+    "find": "projectionMatrix * VIEW_SCALE * modelViewMatrix * vec4(vaPosition, 1.0);",
+    "replace": "projectionMatrix * VIEW_SCALE * ohWarpView(modelViewMatrix * vec4(vaPosition, 1.0), gbufferModelViewInverse, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/gbuffers_basic.glsl",
+    "find": "projectionMatrix * VIEW_SCALE * modelViewMatrix * (vec4(vaPosition + vaNormal, 1.0));",
+    "replace": "projectionMatrix * VIEW_SCALE * ohWarpView(modelViewMatrix * vec4(vaPosition + vaNormal, 1.0), gbufferModelViewInverse, gbufferModelView, renderStage);",
+    "count": 1
+  },
+  {
+    "path": "/program/composite.glsl",
+    "find": "vec3 playerPos = ViewToPlayer(viewPos.xyz);",
+    "replace": "vec3 playerPos = ViewToPlayer(viewPos.xyz);\n    if (z0 > 0.56 && z0 < 1.0) playerPos = ohUnwarp(playerPos);",
+    "count": 1
+  },
+  {
+    "path": "/program/deferred1.glsl",
+    "find": "vec3 playerPos = ViewToPlayer(viewPos.xyz);",
+    "replace": "vec3 playerPos = ViewToPlayer(viewPos.xyz);\n    if (z0 > 0.56 && z0 < 1.0) playerPos = ohUnwarp(playerPos);",
+    "count": 1
+  },
+  {
+    "path": "/lib/antialiasing/taa.glsl",
+    "find": "vec4 previousPosition = pos + vec4(cameraPosition - previousCameraPosition, 0.0);",
+    "replace": "vec4 previousPosition = pos + vec4(cameraPosition - previousCameraPosition, 0.0);\n    if (ohWarpSlope != 0.0 || ohWarpPreviousSlope != 0.0) previousPosition = vec4(ohWarpHistory(pos.xyz), 1.0);",
+    "count": 1
+  },
+  {
+    "path": "/lib/antialiasing/taa.glsl",
+    "find": "if (z1 > 0.56) prvCoord = Reprojection(viewPos1);",
+    "replace": "if (z1 > 0.56) {\n        prvCoord = Reprojection(viewPos1);\n        if (z1 >= 1.0 && (ohWarpSlope != 0.0 || ohWarpPreviousSlope != 0.0)) {\n            vec4 ohSky = gbufferPreviousProjection * gbufferPreviousModelView * (gbufferModelViewInverse * viewPos1 + vec4(cameraPosition - previousCameraPosition, 0.0));\n            prvCoord = ohSky.xy / ohSky.w * 0.5 + 0.5;\n        }\n    }",
+    "count": 1
+  },
+  {
+    "path": "/lib/antialiasing/taa.glsl",
+    "find": "void DoTAA(inout vec3 color, inout vec3 temp, float z1) {",
+    "replace": "void DoTAA(inout vec3 color, inout vec3 temp, float z1) {\n    if (ohWarpResetHistory) { temp = color; return; }",
+    "count": 1
+  },
+  {
+    "path": "/lib/misc/reprojection.glsl",
+    "find": "vec2 Reprojection(vec3 pos, vec3 cameraOffset) {",
+    "replace": "vec2 Reprojection(vec3 pos, vec3 cameraOffset) {\n    bool ohWarpWorld = pos.z > 0.56 && pos.z < 1.0;",
+    "count": 1
+  },
+  {
+    "path": "/lib/misc/reprojection.glsl",
+    "find": "vec4 previousPosition = viewPosPrev + vec4(cameraOffset, 0.0);",
+    "replace": "vec4 previousPosition = viewPosPrev + vec4(cameraOffset, 0.0);\n    if (ohWarpWorld && (ohWarpSlope != 0.0 || ohWarpPreviousSlope != 0.0)) previousPosition = vec4(ohWarpHistory(viewPosPrev.xyz), 1.0);",
+    "count": 1
+  },
+  {
+    "path": "/lib/misc/reprojection.glsl",
+    "find": "vec3 FHalfReprojection(vec3 pos) {",
+    "replace": "vec3 FHalfReprojection(vec3 pos) {\n    bool ohWarpWorld = pos.z > 0.56 && pos.z < 1.0;",
+    "count": 1
+  },
+  {
+    "path": "/lib/misc/reprojection.glsl",
+    "find": "return viewPosPrev.xyz;",
+    "replace": "return ohWarpWorld ? ohUnwarp(viewPosPrev.xyz) : viewPosPrev.xyz;",
+    "count": 1
+  },
+  {
+    "path": "/lib/misc/reprojection.glsl",
+    "find": "vec4 proPos = vec4(playerPos + cameraOffset, 1.0);",
+    "replace": "vec4 proPos = vec4(playerPos + cameraOffset, 1.0);\n    if (ohWarpPreviousSlope != 0.0) proPos.xyz = ohWarpPrevious(proPos.xyz);",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialMethods/worldSpaceRef.glsl",
+    "find": "vec3 worldNormal = normalize(mat3(gbufferModelViewInverse) * normalMR);",
+    "replace": "vec3 worldNormal = normalize(mat3(gbufferModelViewInverse) * normalMR);\n    if (ohWarpSlope != 0.0 && (z0 > 0.56 || isTranslucent)) worldNormal = ohUnwarpNormal(playerPos, worldNormal);",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialMethods/worldSpaceRef.glsl",
+    "find": "vec3 rayDir = mat3(gbufferModelViewInverse) * nViewPosR;",
+    "replace": "vec3 rayDir = mat3(gbufferModelViewInverse) * nViewPosR;\n    if (ohWarpSlope != 0.0 && (z0 > 0.56 || isTranslucent)) rayDir = ohUnwarpDirection(playerPos, rayDir);",
+    "count": 1
+  },
+  {
+    "path": "/lib/materials/materialMethods/reflections.glsl",
+    "find": "vec4 GetReflection(inout vec3 normalM,",
+    "replace": "vec4 ohWarpGetReflection(inout vec3 normalM,",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/volumetricLight/volumetricLight.glsl",
+    "find": "scenePos = rayDirection * nextDistance;",
+    "replace": "scenePos = ohUnwarp(rayDirection * nextDistance);",
+    "count": 2
+  },
+  {
+    "path": "/lib/atmospherics/fog/coloredLightFog.glsl",
+    "find": "if (any(greaterThan(abs(tracePos * 2.0), vec3(voxelVolumeSize)))) break;",
+    "replace": "vec3 ohSourceTrace = ohUnwarp(tracePos);\n        if (any(greaterThan(abs(ohSourceTrace * 2.0), vec3(voxelVolumeSize)))) { tracePos += traceAdd; continue; }",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/fog/coloredLightFog.glsl",
+    "find": "vec3 voxelPos = SceneToVoxel(tracePos);",
+    "replace": "vec3 voxelPos = SceneToVoxel(ohSourceTrace);",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/netherStorm.glsl",
+    "find": "vec3 tracePosM = tracePos * 0.001;",
+    "replace": "vec3 ohSourceTrace = ohUnwarp(tracedPlayerPos) + cameraPosition;\n        vec3 tracePosM = ohSourceTrace * 0.001;",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/netherStorm.glsl",
+    "find": "abs(tracePos.y - NETHER_STORM_LOWER_ALT)",
+    "replace": "abs(ohSourceTrace.y - NETHER_STORM_LOWER_ALT)",
+    "count": 1
+  },
+  {
+    "path": "/lib/atmospherics/netherStorm.glsl",
+    "find": "if (tracePos.y < NETHER_STORM_LOWER_ALT)",
+    "replace": "if (ohSourceTrace.y < NETHER_STORM_LOWER_ALT)",
+    "count": 1
+  },
+  {
+    "path": "/program/composite.glsl",
+    "find": "if (opaqueSurface) {",
+    "replace": "if (opaqueSurface) {\n                    if (ohWarpResetHistory) reflectOutput.a = GetLinearDepth(z1);",
+    "count": 1
+  },
+  {
+    "path": "/program/composite.glsl",
+    "find": "virtualPrevRefPos.xyz -= previousCameraPosition - cameraPosition;",
+    "replace": "virtualPrevRefPos.xyz -= previousCameraPosition - cameraPosition;\n                    if (z0 > 0.56 && (ohWarpSlope != 0.0 || ohWarpPreviousSlope != 0.0)) virtualPrevRefPos.xyz = ohWarpHistory(playerVirtualRefPos.xyz);",
+    "count": 1
+  },
+  {
+    "path": "/program/composite.glsl",
+    "find": "if (virtualPrevRefPos.xyz == clamp01(virtualPrevRefPos.xyz)) {",
+    "replace": "if (!ohWarpResetHistory && virtualPrevRefPos.xyz == clamp01(virtualPrevRefPos.xyz)) {",
+    "count": 1
+  },
+  {
+    "path": "/program/composite.glsl",
+    "find": "prevPos.xyz = 0.5 * prevPos.xyz / prevPos.w + 0.5;",
+    "replace": "if (z0 > 0.56 && (ohWarpSlope != 0.0 || ohWarpPreviousSlope != 0.0)) prevPos = gbufferPreviousProjection * gbufferPreviousModelView * vec4(ohWarpPrevious(playerPos + ohWarpCameraDelta), 1.0);\n                        prevPos.xyz = 0.5 * prevPos.xyz / prevPos.w + 0.5;",
+    "count": 1
+  },
+  {
+    "path": "/program/composite.glsl",
+    "find": "vec3 prevNormalM = mat3(gbufferModelView) * texture2D(colortex1, virtualPrevRefPos.xy).rgb;",
+    "replace": "vec3 ohPreviousNormal = texture2D(colortex1, virtualPrevRefPos.xy).rgb;\n                        if (z0 > 0.56) ohPreviousNormal = ohWarpHistoryNormal(playerPos, ohPreviousNormal);\n                        vec3 prevNormalM = mat3(gbufferModelView) * ohPreviousNormal;",
+    "count": 1
+  },
+  {
+    "path": "/program/composite4.glsl",
+    "find": "if (z <= 0.56) {",
+    "replace": "if (z <= 0.56 || ohWarpResetHistory) {",
+    "count": 1
+  },
+  {
+    "path": "/program/composite4.glsl",
+    "find": "vec4 previousPosition = viewPos + vec4(cameraOffset, 0.0);",
+    "replace": "vec4 previousPosition = viewPos + vec4(cameraOffset, 0.0);\n            if (z < 1.0 && (ohWarpSlope != 0.0 || ohWarpPreviousSlope != 0.0)) previousPosition.xyz = ohWarpHistory(viewPos.xyz);",
+    "count": 1
+  }
+]
