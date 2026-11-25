@@ -101,6 +101,56 @@ tasks.named('processResources', ProcessResources).configure {
     inputs.properties props
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props }
 }
+
+// Fail before copying resources if editing the eel engine stretches or compresses its texels.
+tasks.register('verifyElectricEelUv') {
+    group = 'verification'
+    description = 'Checks every eel-engine face against its fixed, isotropic texture density; no packaging.'
+    def modelFile = file("src/main/resources/assets/${mod_id}/models/block/electric_eel_engine.json")
+    inputs.file(modelFile)
+    inputs.files(fileTree("src/main/resources/assets/${mod_id}/textures/block") { include 'electric_eel_engine*.png' })
+    doLast {
+        def model = new groovy.json.JsonSlurper().parse(modelFile, 'UTF-8')
+        def textures = [:]
+        int checked = 0
+        model.elements.each { element ->
+            def size = (0..2).collect { (element.to[it] as double) - (element.from[it] as double) }
+            def axes = [north: [0, 1], south: [0, 1], east: [2, 1], west: [2, 1], up: [0, 2], down: [0, 2]]
+            if (element.rotation?.rescale) throw new GradleException("Eel UV: ${element.name} uses rescale; recheck physical texel density.")
+            element.faces.each { direction, face ->
+                String label = "${element.name}/${direction}"
+                String reference = face.texture?.startsWith('#') ? model.textures[face.texture.substring(1)] : null
+                if (!reference?.startsWith("${mod_id}:block/electric_eel_engine") || face.uv?.size() != 4 || !axes.containsKey(direction)) {
+                    throw new GradleException("Eel UV: invalid texture or UV mapping at ${label}")
+                }
+                if (!textures.containsKey(reference)) {
+                    def textureFile = file("src/main/resources/assets/${mod_id}/textures/${reference.split(':', 2)[1]}.png")
+                    def image = javax.imageio.ImageIO.read(textureFile)
+                    if (image == null) throw new GradleException("Eel UV: cannot decode ${textureFile}")
+                    textures[reference] = [image.width, image.height]
+                }
+                def textureSize = textures[reference]
+                def uvSpan = [Math.abs((face.uv[2] as double) - (face.uv[0] as double)),
+                              Math.abs((face.uv[3] as double) - (face.uv[1] as double))]
+                def pixels = (0..1).collect { uvSpan[it] * textureSize[it] / 16.0D }
+                if ((face.rotation ?: 0) % 180 != 0) pixels = pixels.reverse()
+                (0..1).each { axis ->
+                    double extent = size[axes[direction][axis]]
+                    double density = pixels[axis] / extent
+                    if (extent <= 0 || !Double.isFinite(density) || Math.abs(density - 8.0D) > 0.00001D) {
+                        throw new GradleException("Eel UV: ${label}, axis ${axis}: ${density} px/unit; expected 8. Redraw or crop the UV island instead of stretching it.")
+                    }
+                }
+                if (face.uv.any { (it as double) < 0 || (it as double) > 16 }) throw new GradleException("Eel UV: out-of-atlas mapping at ${label}")
+                checked++
+            }
+        }
+        if (checked == 0) throw new GradleException('Eel UV: model has no faces to check')
+        logger.lifecycle("Eel UV: ${checked} faces passed, 8 px/model unit on both axes.")
+    }
+}
+tasks.named('processResources') { dependsOn 'verifyElectricEelUv' }
+
 tasks.named('jar', Jar).configure {
     manifest { attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}.blackhole.mixins.json,${mod_id}.finale.mixins.json,${mod_id}.illusiontp.mixins.json,${mod_id}.colorloss.mixins.json,${mod_id}.worldwarp.mixins.json", 'Implementation-Version': mod_version) }
     finalizedBy 'reobfJar'

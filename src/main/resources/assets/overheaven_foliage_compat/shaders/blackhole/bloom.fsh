@@ -34,8 +34,8 @@ vec4 extractLight(vec2 uv) {
     if(relativistic()) {
         float luminance=dot(light,vec3(.2126,.7152,.0722));
         // Smooth bright-pass on disk radiance only. Keep the authored singularity bloom.
-        float knee=smoothstep(.3,1.5,luminance);
-        light*=mix(.32*knee,1.,clamp(FinaleAmount,0.,1.));
+        float knee=smoothstep(.45,1.8,luminance);
+        light*=mix(.50*knee,1.,clamp(FinaleAmount,0.,1.));
     }
     return vec4(light,Extract==2?emissionDepth.y:Extract==3?emissionDepth.x:min(emissionDepth.x,emissionDepth.y));
 }

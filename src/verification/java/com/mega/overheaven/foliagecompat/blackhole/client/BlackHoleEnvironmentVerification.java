@@ -79,9 +79,17 @@ public final class BlackHoleEnvironmentVerification {
             }
             // Oculus pre-refraction background mode shares the complete nontransparent scene.
             result.bind();composite.use();material(composite,projection(),opaque,surface,disk,48);bindComposite(composite,scene,opaque,surface,solution,bloom);composite.integer("LayerMode",1);draw();late=center(result);check(Math.abs(late[1]-expected[1])<.015,"Oculus back layer must include late background");
-            // A transparent source cannot be imported from completed color without its layer data.
+            // A lens landing on water uses the opaque capture under that texel. The
+            // early sky has a different color from both the destination and late sky.
             surface.bind();glEnable(GL_SCISSOR_TEST);glScissor((int)(W*expected[0])-W/16,(int)(H*expected[1])-H/16,W/8,H/8);glClearBufferfv(GL_COLOR,1,new float[]{.5f,0,0,0});glDisable(GL_SCISSOR_TEST);
-            result.bind();composite.use();composite.integer("LayerMode",0);draw();late=center(result);check(Math.abs(late[1]-.5)<.015,"unresolved transparent source preserves destination");
+            result.bind();composite.use();composite.integer("LayerMode",0);draw();late=center(result);
+            check(Math.abs(late[0]-.05)<.001 && Math.abs(late[1]-.1)<.001 && Math.abs(late[2]-.2)<.001,"use captured sky behind transparent source");
+            Vector4f terrain=projection().transform(new Vector4f(0,0,-80,1));
+            opaque.bind();glClearBufferfv(GL_COLOR,0,new float[]{.17f,.31f,.09f,1});
+            glClearBufferfv(GL_COLOR,1,new float[]{terrain.z/terrain.w*.5f+.5f,0,0,0});
+            result.bind();draw();late=center(result);
+            check(Math.abs(late[0]-.17)<.001 && Math.abs(late[1]-.31)<.001 && Math.abs(late[2]-.09)<.001,"use opaque riverbed behind transparent source");
+            opaque.bind();fill.use();fill.integer("Late",0);draw();
             surface.bind();glClearBufferfv(GL_COLOR,1,new float[]{1,0,0,0});
             // No lens: completed sky is preserved, without early-color subtraction residue.
             var bounds=new BlackHoleScreenBounds();

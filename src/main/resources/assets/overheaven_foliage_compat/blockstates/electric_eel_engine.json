@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "overheaven_foliage_compat:block/electric_eel_engine" },
+    "facing=east": { "model": "overheaven_foliage_compat:block/electric_eel_engine", "y": 90 },
+    "facing=south": { "model": "overheaven_foliage_compat:block/electric_eel_engine", "y": 180 },
+    "facing=west": { "model": "overheaven_foliage_compat:block/electric_eel_engine", "y": 270 }
+  }
+}

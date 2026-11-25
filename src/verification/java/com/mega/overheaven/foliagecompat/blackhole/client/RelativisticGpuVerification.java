@@ -47,7 +47,7 @@ public final class RelativisticGpuVerification {
             if(finaleTicks>=0 && timeline.frame(finaleTicks).phase()==com.mega.overheaven.foliagecompat.finale.FinaleTimeline.Phase.RETURN)
                 p.scalar("FinaleAmount",1-com.mega.overheaven.foliagecompat.finale.FinaleTimeline.smooth(0,1,timeline.frame(finaleTicks).progress()));
             double angle=Math.toRadians(tilt);
-            p.vector("DiskNormal",0,(float)Math.cos(angle),(float)Math.sin(angle));p.vector("DiskForward",0,(float)-Math.sin(angle),(float)Math.cos(angle));
+            p.vector("DiskNormal",0,(float)Math.cos(angle),(float)Math.sin(angle));p.vector("DiskForward",0,(float)Math.sin(angle),(float)-Math.cos(angle));
             p.scalar("Rotation",rotation);p.scalar("Radius",radius);p.scalar("Lensing",lensing);p.scalar("Inner",inner);p.scalar("Outer",outer);p.scalar("Thickness",thickness);
             advection.evaluate(time,rotation,.12,outer-inner,12);advection.apply(p);
             if(uniform)p.texture("DiskTexture",10,constantDisk);
@@ -160,7 +160,7 @@ public final class RelativisticGpuVerification {
                 } else if(Probe==2) {
                     float a=mix(-.95,.95,texCoord.x);Color=vec4(kerrIsco(a),kerrHorizon(a),kerrOrbit(6.,a,1.),1.);
                 } else if(Probe==3) {
-                    vec3 m=highMaterial(vec2(6.*cos(texCoord.x*6.2831853),6.*sin(texCoord.x*6.2831853)),.01,Delay,.615840287);
+                    vec3 m=highMaterial(vec2(cos(texCoord.x*6.2831853),sin(texCoord.x*6.2831853)),6.,vec2(.01),Delay,.615840287);
                     Color=vec4(m,1.);
                 } else if(Probe==5) {
                     float r=mix(6.,60.,texCoord.x);KerrConstants c;c.a=0.;c.e=1.;c.l=0.;
@@ -178,6 +178,10 @@ public final class RelativisticGpuVerification {
                         if(u<=0. || u>=1./(kerrHorizon(c.a)*1.001))break;
                     }
                     Color=vec4(error,1.);
+                } else if(Probe==7) {
+                    float inner=3.8,outer=11.;
+                    float r=texCoord.x<.34?inner*(49./36.):texCoord.x<.67?inner:outer;
+                    Color=vec4(highEmission(r,inner,outer,vec3(.4,1.,.5)),1.);
                 } else {
                     // An exactly spherical zero-spin photon orbit must survive >4 turns.
                     Field f;f.front=vec4(0);f.back=vec4(0);f.lens=vec4(0);f.meta=vec4(0);
@@ -240,36 +244,110 @@ public final class RelativisticGpuVerification {
             p.advection.evaluate(12,.25,.12,7.2,12);p.advection.apply(probe);draw();float[] delayed=image(target,0);
             probe.scalar("Delay",0);p.advection.evaluate(11.25,.25,.12,7.2,12);p.advection.apply(probe);draw();
             check(maxDifference(delayed,image(target,0))<.00002,"retarded material equals earlier synchronized clock");
+            probe.integer("Probe",7);probe.scalar("Brightness",1);
+            probe.vector("HotColor",1,1,1);probe.vector("ColdColor",1,1,1);draw();
+            float[] gas=image(target,0);
+            double luminance=.2126*gas[0]+.7152*gas[1]+.0722*gas[2];
+            check(Math.abs(luminance-2.2)<.003 && Math.abs(gas[0]-gas[2])<.004,"6500 K white balance and disk exposure at the flux peak");
+            check(gas[512]==0 && gas[513]==0 && gas[514]==0,"thermal inner edge");
+            int outerSample=255*4;
+            check(gas[outerSample]>0 && gas[outerSample]<gas[0] && gas[outerSample]/gas[outerSample+2]>gas[0]/gas[2],"cooler, fainter outer gas");
             System.out.println("PASS Kerr +/- spin capture, null invariant, ISCO, orbital velocity, Shapiro time, >4 photon turns, retarded cohort clock");
         }
     }
-    private static void png(GlTarget target,String name)throws Exception {
+    private static void displayPng(GlTarget target,String name)throws Exception {
         float[] pixels=image(target,0);BufferedImage result=new BufferedImage(target.width,target.height,BufferedImage.TYPE_INT_RGB);
         for(int y=0;y<target.height;y++)for(int x=0;x<target.width;x++) {
-            int rgb=0;for(int c=0;c<3;c++){double v=Math.max(0,pixels[(y*target.width+x)*4+c]);v=v/(1+v);rgb=rgb<<8|(int)Math.round(Math.pow(v,1/2.2)*255);}
+            int rgb=0;
+            for(int c=0;c<3;c++) {
+                float v=pixels[(y*target.width+x)*4+c];
+                rgb=rgb<<8|Math.round(Math.min(1,Math.max(0,v))*255);
+            }
             result.setRGB(x,target.height-1-y,rgb);
         }
         ImageIO.write(result,"png",output.resolve(name+".png").toFile());
     }
     private static double maxDifference(float[] a,float[] b) { double error=0;for(int i=0;i<a.length;i++){check(Float.isFinite(a[i])&&Float.isFinite(b[i]),"finite frame");error=Math.max(error,Math.abs(a[i]-b[i]));}return error; }
-    private static double sideEnergy(float[] image,int width,boolean left) {double e=0;for(int i=0;i<image.length;i+=4)if(((i/4)%width<width/2)==left)e+=image[i]+image[i+1]+image[i+2];return e;}
+    private static double sideRatio(Pipeline p) {
+        float[] light=image(p.solution,0);
+        double[][] rgb=new double[2][3];
+        for(int y=p.rect.bottom;y<p.rect.top;y++)for(int x=p.rect.left;x<p.rect.right;x++) {
+            int i=(y*p.solution.width+x)*4;
+            for(int c=0;c<3;c++)rgb[x<p.solution.width/2?0:1][c]+=light[i+c];
+        }
+        double[] total={Arrays.stream(rgb[0]).sum(),Arrays.stream(rgb[1]).sum()};
+        check(total[0]>0 && total[1]>0,"both sides emit");
+        for(int c=0;c<3;c++)check(Math.abs(rgb[0][c]/total[0]-rgb[1][c]/total[1])<.002,"local-temperature chromaticity "+c);
+        double ratio=total[0]/total[1];
+        check(ratio>.9 && ratio<1.1,"uniform gas sides with spin=0, rotation="+p.rotation+" ratio="+ratio);
+        return ratio;
+    }
+    private static void comparisonScene(Pipeline p,int width,int height) {
+        p.dark=true;p.constantDepth=true;p.uniform=false;p.split=false;p.displaySpace=true;p.shape=0;p.finaleTicks=-1;
+        p.centerX=0;p.distance=35;p.tilt=30;p.spin=.6f;p.rotation=.25f;p.lensing=1;p.time=7;p.glowStrength=.7f;
+        p.quality(96);p.resize(width,height);
+    }
+    private static void portraitCamera(Pipeline p) {
+        comparisonScene(p,1152,720);
+        p.vp.identity().perspective((float)Math.toRadians(42),p.width/(float)p.height,.05f,2000);
+        p.inv.set(p.vp).invert();
+        p.inputs();
+    }
+    private static void backgrounds(Pipeline p,Pipeline old,int steps,Path frames,boolean measure,boolean unchanged)throws Exception {
+        for(var q:new Pipeline[]{old,p}) {
+            comparisonScene(q,640,360);
+            if(steps<96) q.quality(steps);
+            q.dark=false;q.constantDepth=false;q.tilt=15;q.glowStrength=0;
+        }
+        Files.createDirectories(frames);
+        KerrBackgroundVerification.run(old,p,source,frames,measure,unchanged);
+    }
+    private static void lensTiers(Pipeline p,Pipeline old)throws Exception {
+        for(int steps:new int[]{24,48,96}) {
+            System.out.println("Testing lens at quality steps="+steps);
+            backgrounds(p,old,steps,output.resolve("steps-"+steps),true,steps==96);
+            for(var q:new Pipeline[]{old,p}) {q.resize(480,270);q.shape=2;q.inputs();}
+            for(double seconds:new double[]{9,26,40.65}) {
+                for(var q:new Pipeline[]{old,p}) {q.finaleTicks=seconds*20;q.frame(1);}
+                check(Arrays.equals(image(old.out,0),image(p.out,0)),"revealed singularity/wave composite changed at "+seconds+"s, steps="+steps);
+            }
+        }
+    }
+    private static void portraits(Pipeline p,Pipeline old)throws Exception {
+        portraitCamera(old);portraitCamera(p);
+        for(int angle:new int[]{5,30,90}) {
+            for(var q:new Pipeline[]{old,p}) {
+                q.tilt=angle;q.frame(1);
+                displayPng(q.out,(q==old?"before-":"after-")+angle);
+            }
+        }
+    }
+    private static void motion(Pipeline p)throws Exception {
+        portraitCamera(p);p.tilt=12;
+        Files.createDirectories(output.resolve("motion"));
+        for(int i=0;i<120;i++) {
+            p.time=7+i/24.;p.frame(1);displayPng(p.out,String.format(Locale.ROOT,"motion/frame-%03d",i));
+        }
+    }
     private static void pipelines(Pipeline p,Pipeline old)throws Exception {
         for(int quality:new int[]{24,48}) {
             for(var q:new Pipeline[]{p,old}) {q.quality(quality);q.resize(320,180);q.split=false;q.frame(1);}
-            check(maxDifference(image(p.out,0),image(old.out,0))<.001,"low/balanced pixel regression "+quality);
+            for(int layer:new int[]{0,1})
+                check(Arrays.equals(image(p.solution,layer),image(old.solution,layer)),"disk radiance/transmission regression "+quality);
+            for(var q:new Pipeline[]{p,old}) {q.lensing=0;q.frame(1);q.lensing=1;}
+            check(maxDifference(image(p.out,0),image(old.out,0))==0,"unwarped scene regression "+quality);
         }
-        p.quality(96);p.resize(640,360);p.constantDepth=true;p.dark=true;p.uniform=true;p.glowStrength=0;p.inputs();
-        p.rotation=.25f;p.frame(1);float[] positive=image(p.out,0);png(p.out,"high-positive");
-        p.rotation=-.25f;p.frame(1);float[] negative=image(p.out,0);png(p.out,"high-negative");
-        double a=sideEnergy(positive,p.width,true)/sideEnergy(positive,p.width,false),b=sideEnergy(negative,p.width,true)/sideEnergy(negative,p.width,false);
-        check((a-1)*(b-1)<0 && Math.abs(a-1)>.15 && Math.abs(b-1)>.15,"beaming flips with gas direction: "+a+" / "+b);
+        comparisonScene(p,640,360);p.spin=0;p.uniform=true;p.glowStrength=0;
+        p.rotation=.25f;p.frame(1);double positive=sideRatio(p);
+        p.rotation=-.25f;p.frame(1);double negative=sideRatio(p);
+        p.rotation=0;p.frame(1);sideRatio(p);
+        p.lensing=0;p.frame(1);sideRatio(p);p.lensing=1;
+        p.uniform=false;
         p.rotation=.25f;p.frame(1);float[] frozen=image(p.out,0);p.frame(1);check(Arrays.equals(frozen,image(p.out,0)),"pause deterministic");
         float[] meta=image(p.solution,3),front=image(p.solution,0);int dark=0,foreground=0;
         for(int i=0;i<meta.length;i+=4)if(meta[i+2]==1){if(front[i]+front[i+1]+front[i+2]>.0001)foreground++;else dark++;}
         check(dark>0 && foreground>0,"captured rays retain foreground disk "+dark+" / "+foreground);
-        p.uniform=false;p.glowStrength=.7f;p.resize(960,540);
-        for(float tilt:new float[]{5,30,90}) {p.tilt=tilt;p.frame(1);png(p.out,"high-tilt-"+(int)tilt);}
-        p.tilt=30;p.constantDepth=false;p.dark=false;p.split=true;
+        comparisonScene(p,960,540);p.constantDepth=false;p.dark=false;p.split=true;
         for(int shape=0;shape<=3;shape++) {
             p.shape=shape;p.inputs();p.frame(1);float[] cache=image(p.front,0);p.compose(p.reference,2);
             check(maxDifference(cache,image(p.reference,0))<.003,"front-cache split equivalence "+shape);
@@ -290,7 +368,7 @@ public final class RelativisticGpuVerification {
             for(float v:data)check(Float.isFinite(v),"finite horizon/observer limit "+distance);
         }
         p.distance=35;p.glowStrength=.7f;
-        for(var q:new Pipeline[]{p,old}) {q.quality(96);q.resize(320,180);q.constantDepth=true;q.split=false;q.glowStrength=.7f;q.inputs();}
+        for(var q:new Pipeline[]{p,old})comparisonScene(q,320,180);
         p.finaleTicks=-1;p.frame(1);float[] ordinaryHigh=image(p.out,0);
         p.finaleTicks=0;p.frame(1);check(maxDifference(ordinaryHigh,image(p.out,0))<.0001,"show begins with identical high black hole");
         for(double time:new double[]{0,2,4,4.4,4.45,4.5,4.55,8,41,100,119}) {
@@ -298,14 +376,15 @@ public final class RelativisticGpuVerification {
             double difference=maxDifference(image(p.out,0),image(old.out,0));
             if(time<=4.4 || time==119)check(difference>.01,"high active during black-hole show phase "+time);
             else if(time>=4.55 && time<119) {
-                check(maxDifference(image(p.solution,0),image(old.solution,0))<.001,"revealed singularity source preserved "+time);
-                check(maxDifference(image(p.solution,1),image(old.solution,1))<.001,"revealed singularity back source preserved "+time);
+                check(maxDifference(image(p.solution,0),image(old.solution,0))==0,"revealed singularity source preserved "+time);
+                check(maxDifference(image(p.solution,1),image(old.solution,1))==0,"revealed singularity back source preserved "+time);
+                check(difference==0,"revealed singularity composite preserved "+time);
             }
-            if(time==0 || time==4 || time==4.45 || time==119)png(p.out,"high-show-"+time);
+            if(time==0 || time==4 || time==4.45 || time==119)displayPng(p.out,"high-show-"+time);
         }
         p.finaleTicks=-1;p.high=true;p.scale=1;p.resize(640,360);p.constantDepth=false;p.inputs();
         RenderStabilityGpuVerification.resourceChecks(p);
-        System.out.printf(Locale.ROOT,"PASS low/balanced, beaming ratios %.3f/%.3f, capture/front light, split depth, limits, finale, GL lifecycle%n",a,b);
+        System.out.printf(Locale.ROOT,"PASS low/balanced, uniform gas side ratios %.4f/%.4f, capture/front light, split depth, limits, finale, GL lifecycle%n",positive,negative);
     }
     private static double timed(Pipeline p) {int query=glGenQueries();glBeginQuery(GL_TIME_ELAPSED,query);for(int i=0;i<8;i++)p.frame(1);glEndQuery(GL_TIME_ELAPSED);double ms=glGetQueryObjectui64(query,GL_QUERY_RESULT)/8e6;glDeleteQueries(query);return ms;}
     private static void performance(Pipeline p,Pipeline old) {
@@ -315,12 +394,15 @@ public final class RelativisticGpuVerification {
             double[] a=new double[5],b=new double[5];for(int i=0;i<5;i++){a[i]=timed(old);b[i]=timed(p);}Arrays.sort(a);Arrays.sort(b);
             System.out.printf(Locale.ROOT,"BENCH preserved quality=%d 1080p old=%.3f new=%.3f ms%n",quality,a[2],b[2]);
         }
-        for(var q:new Pipeline[]{p,old}) {q.quality(96);q.finaleTicks=-1;q.constantDepth=false;q.dark=false;q.glowStrength=.7f;q.resize(1920,1080);}
+        for(var q:new Pipeline[]{p,old}) {comparisonScene(q,1920,1080);q.dark=false;}
         for(int scenario=0;scenario<3;scenario++) {
-            for(var q:new Pipeline[]{p,old}) {q.distance=scenario==0?120:22;q.shape=0;q.split=scenario==2;q.inputs();}
+            for(var q:new Pipeline[]{p,old}) {q.distance=scenario==0?120:22;q.constantDepth=scenario==0;q.split=scenario==2;q.displaySpace=!q.split;q.inputs();}
             for(int i=0;i<20;i++){old.frame(1);p.frame(1);}
-            double[] a=new double[5],b=new double[5];for(int i=0;i<5;i++){a[i]=timed(old);b[i]=timed(p);}Arrays.sort(a);Arrays.sort(b);
-            System.out.printf(Locale.ROOT,"BENCH high 1080p scenario=%d old=%.3f new=%.3f ms (synthetic subject, not game FPS)%n",scenario,a[2],b[2]);
+            double[] a=new double[9],b=new double[9];for(int i=0;i<a.length;i++) {
+                if((i&1)==0){a[i]=timed(old);b[i]=timed(p);}else{b[i]=timed(p);a[i]=timed(old);}
+            }
+            Arrays.sort(a);Arrays.sort(b);
+            System.out.printf(Locale.ROOT,"BENCH high 1080p scenario=%d old=%.3f new=%.3f ms (synthetic subject, not game FPS)%n",scenario,a[4],b[4]);
         }
     }
     public static void main(String[] args)throws Exception {
@@ -329,7 +411,20 @@ public final class RelativisticGpuVerification {
         long window=glfwCreateWindow(64,64,"high geodesic verification",0,0);check(window!=0,"context");glfwMakeContextCurrent(window);GL.createCapabilities();vao=glGenVertexArrays();RenderStabilityGpuVerification.vao=vao;
         System.out.println("GPU: "+glGetString(GL_RENDERER));
         try(var p=new Pipeline(source);var old=new Pipeline(Path.of(args[1]))) {
-            analyticProbes(p);kerrProbes(p);pipelines(p,old);if(args.length<4 || !args[3].equals("checks"))performance(p,old);
+            String mode=args.length>3?args[3]:"all";
+            if(mode.equals("portraits"))portraits(p,old);
+            else if(mode.equals("motion"))motion(p);
+            else if(mode.equals("lens")) backgrounds(p,old,96,output,true,false);
+            else if(mode.equals("lens-tiers")) lensTiers(p,old);
+            else {
+                try(var classifier=p.variant("reconstruction_count",false);
+                    var fullClassifier=p.variant("reconstruction_count",true);
+                    var glare=new GlProgram(VerificationShaders.read(source,"fullscreen.vsh"),VerificationShaders.read(source,"singularity_source.fsh"))) {
+                    check(classifier.handle()!=0 && fullClassifier.handle()!=0 && glare.handle()!=0,"diagnostics and glare shader links");
+                }
+                analyticProbes(p);kerrProbes(p);pipelines(p,old);backgrounds(p,old,96,output,false,false);portraits(p,old);
+                if(!mode.equals("checks"))performance(p,old);
+            }
             check(glGetError()==GL_NO_ERROR,"no GL errors");
         } finally {glUseProgram(0);glDeleteVertexArrays(vao);glfwDestroyWindow(window);glfwTerminate();}
         System.out.println("PASS "+checks+" checks. Independent GPU validation only; host integration requires game acceptance.");

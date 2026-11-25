@@ -62,7 +62,7 @@ vec3 introHorizonRim(float impact,float footprint) {
     return innerTransitionColor(HotColor,Radius)*rim*Brightness*.9*IntroTighten;
 }
 float wideBloomGain() {
-    return mix(relativistic()?.12:.4,1.,max(clamp(FinaleAmount,0.,1.),IntroEnabled!=0?IntroTighten:0.));
+    return mix(relativistic()?.36:.4,1.,max(clamp(FinaleAmount,0.,1.),IntroEnabled!=0?IntroTighten:0.));
 }
 vec3 displayLight(vec3 light) {
     // Only our emitted light is mapped here. Shader packs still receive linear HDR.

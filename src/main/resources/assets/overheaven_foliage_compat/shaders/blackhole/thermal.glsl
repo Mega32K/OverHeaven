@@ -2,7 +2,7 @@
 // CIE 1931 analytic response, Wyman/Sloan/Shirley (JCGT 2013), equation 2:
 // https://jcgt.org/published/0002/02/01/paper.pdf . Coefficients below include
 // lambda^-5 and one constant normalization (Y=1 at 12000 K), NOT per-color
-// normalization. Frequency shift is applied to temperature before integration.
+// normalization. The caller chooses the temperature at which to integrate.
 const vec4 THERMAL_BANDS[16]=vec4[16](
     vec4(0.0543385982,0.000145200958,0.389924023,36891.7148),
     vec4(0.746311708,0.0038173078,4.10896234,34669.3223),

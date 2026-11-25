@@ -91,6 +91,7 @@ private static final class OldBloom implements AutoCloseable {
         GlProgram composeFull,blurFull,frontFull;
         final boolean legacy;int width,height,steps=48;float scale=.5f,distance=35,centerX=0,glowStrength=.35f;double time=7;boolean renew=true,constantDepth=false;int shape;boolean split=true,fullCopies=false,cosmicScene=false;
         double finaleTicks=-1;
+        boolean displaySpace;
         final FinaleTimeline timeline=FinaleTimeline.defaults();
         final FinaleWaves.State waves=new FinaleWaves.State();
         final CausalTransition.State intro=new CausalTransition.State();
@@ -159,7 +160,7 @@ private static final class OldBloom implements AutoCloseable {
             GlProgram compose=!legacy&&rect.full(solution.width,solution.height)?composeFull:this.compose;
             target.bind();if(target==out){if(mode==1)glDrawBuffers(new int[]{GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1});else glDrawBuffer(GL_COLOR_ATTACHMENT0);}
             glow.scissor();compose.use();material(compose,false);
-            compose.texture("Scene",0,snapshot.textures[0]);compose.texture("Opaque",1,cosmicScene&&!legacy?snapshot.textures[0]:opaque.textures[0]);compose.texture("Transmission",2,constantDepth?constant.textures[0]:surface.textures[0]);compose.texture("FrontTexture",3,solution.textures[0]);compose.texture("BackTexture",4,solution.textures[1]);compose.texture("LensTexture",5,solution.textures[2]);compose.texture("MetaTexture",6,solution.textures[3]);compose.texture("Bloom",7,(legacy?oldBloom.result():bloom.result()).textures[0]);bloom.bounds(compose);compose.integer("LayerMode",mode);compose.integer("DisplaySpace",0);draw();glDisable(GL_SCISSOR_TEST);
+            compose.texture("Scene",0,snapshot.textures[0]);compose.texture("Opaque",1,cosmicScene&&!legacy?snapshot.textures[0]:opaque.textures[0]);compose.texture("Transmission",2,constantDepth?constant.textures[0]:surface.textures[0]);compose.texture("FrontTexture",3,solution.textures[0]);compose.texture("BackTexture",4,solution.textures[1]);compose.texture("LensTexture",5,solution.textures[2]);compose.texture("MetaTexture",6,solution.textures[3]);compose.texture("Bloom",7,(legacy?oldBloom.result():bloom.result()).textures[0]);bloom.bounds(compose);compose.integer("LayerMode",mode);compose.integer("DisplaySpace",displaySpace?1:0);draw();glDisable(GL_SCISSOR_TEST);
         }
         void cachedFront() {
             GlProgram frontShader=rect.full(solution.width,solution.height)?frontFull:this.frontShader;

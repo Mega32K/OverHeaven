@@ -14,6 +14,7 @@ public final class FoliageCompat {
         com.mega.overheaven.foliagecompat.filter.SeawaterFilters.register(context.getModEventBus());
         com.mega.overheaven.foliagecompat.shelf.Shelves.register(context.getModEventBus());
         com.mega.overheaven.foliagecompat.naidan.Naidan.register(context.getModEventBus());
+        com.mega.overheaven.foliagecompat.eel.ElectricEelEngines.register(context.getModEventBus());
         com.mega.overheaven.foliagecompat.blackhole.BlackHoleNetwork.init();
         com.mega.overheaven.foliagecompat.finale.FinaleNetwork.init();
         com.mega.overheaven.foliagecompat.pixeltp.PixelTpNetwork.init();

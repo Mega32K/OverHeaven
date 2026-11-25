@@ -98,46 +98,67 @@ float highCohortHash(float cycle,int cohort) {
     n^=n>>16;n*=0x7feb352du;n^=n>>15;n*=0x846ca68bu;n^=n>>16;
     return float(n&0x00ffffffu)/16777216.;
 }
-vec3 highCohort(vec2 disk,float footprint,float age,float anchor,float offset,float flow,float mass) {
-    float r=max(length(disk),.001),scale=bodyScale(),inner=Inner*scale,outer=Outer*scale,span=max(outer-inner,.001);
+// Widths in blocks along the local radial and tangential directions. An oblique
+// chord averages gas along its own direction, not across every strand it touches.
+vec2 diskFootprint(vec2 radial,vec2 stepXY,float pixelWidth) {
+    return max(vec2(pixelWidth),abs(vec2(dot(radial,stepXY),dot(vec2(-radial.y,radial.x),stepXY)))*.5);
+}
+vec3 highCohort(vec2 uv,vec2 width,float offset) {
+    vec2 seed=vec2(Seed*.071+offset,Seed*.137+offset*.731);
+    vec3 eddy=diskLookup(uv*vec2(2,1)+seed,width*vec2(2,1));
+    // Bend the strands within the gas. Integer repeats in both coordinates
+    // keep the azimuth seam and every wrap of radial inflow continuous.
+    float bent=uv.y+.105*(eddy.r-.5);
+    float bentWidth=width.y+.44*(2.*width.x+width.y);
+    vec2 ribbonWidth=vec2(3.*width.x,4.*bentWidth+width.x);
+    vec3 ribbon=diskLookup(vec2(3.*uv.x,4.*bent+uv.x)-seed,ribbonWidth);
+    vec2 fiberWidth=vec2(6.*width.x,9.*bentWidth+2.*width.x+1.5*max(ribbonWidth.x,ribbonWidth.y));
+    vec3 fiber=diskLookup(vec2(6.*uv.x,9.*bent+2.*uv.x+.38*(ribbon.r-.5))+seed.yx,fiberWidth);
+    float body=smoothstep(.34,.67,.78*ribbon.r+.22*eddy.r);
+    float sheet=smoothstep(.38,.68,fiber.r+.24*(fiber.g-.64));
+    // A narrow ridge in the bent gas coordinate breaks up into filaments.
+    // Return its unresolved contrast to the mean before the ridge test aliases.
+    float ridge=1.-smoothstep(.018,.12,abs(fiber.r-.54));
+    ridge=mix(ridge,.4,smoothstep(.018,.075,max(fiberWidth.x,fiberWidth.y)));
+    float filament=mix(sheet,ridge,.62);
+    return vec3(.06+.38*body+.18*filament, .08+.35*body+.35*body*body+(.28+1.6*body)*filament, eddy.r);
+}
+vec3 highMaterial(vec2 radial,float r,vec2 footprint,float delay,float mass) {
+    const float turns=1./6.28318530718;
+    float scale=bodyScale(),inner=Inner*scale,span=max((Outer-Inner)*scale,.001);
+    r=max(r,.001);
     float sense=Rotation<0.?-1.:1.,a=clamp(Spin,-.95,.95)*sense;
     float q=pow(max(r/max(mass,1e-7),.001),1.5);
     float shear=mass>1e-7?(pow(6.,1.5)+a)/(q+a):pow(inner/r,1.5);
-    float phase=age*Rotation+(IntroEnabled!=0?IntroFlow*1.7:0.);
-    float angle=atan(disk.y,disk.x)/6.28318530718-phase*shear/6.28318530718-anchor;
-    vec2 uv=vec2(angle,(r-inner)/span+flow+(IntroEnabled!=0?IntroFlow*.85:0.));
-    vec2 width=vec2(footprint/(6.28318530718*r)*(1.+abs(phase)*shear*1.5),footprint/span);
-    vec2 seed=vec2(Seed*.071+offset,Seed*.137+offset*.731);
-    vec3 cloud=diskLookup(uv*vec2(5,1)+seed,width*vec2(5,1));
-    vec3 fold=diskLookup(uv*vec2(11,3)-seed,width*vec2(11,3));
-    vec3 thread=diskLookup(uv*vec2(3,7)+vec2(cloud.g*.12,fold.b*.08)+seed,width*vec2(6,10));
-    // Broad, dim gas remains visible; narrow hot filaments do not flatten all layers.
-    float body=smoothstep(.28,.72,cloud.r*.8+fold.g*.2),filament=smoothstep(.35,.78,thread.r);
-    float coverage=.045+body*(.24+filament*.8);
-    float radiation=.055+body*body*(.32+filament*1.65)*(.5+fold.r*.9);
-    return vec3(coverage,radiation,cloud.b);
-}
-vec3 highMaterial(vec2 disk,float footprint,float delay,float mass) {
+    float shearWidth=1.5*shear*(mass>1e-7?q/(q+a):1.)*footprint.x*turns/r;
     vec4 clock=DiskClock;
-    if(DiskRenewal==0) clock=vec4(mod(Time,8.),mod(floor(Time/8.),65536.),fract(floor(Time/8.)*8.*Rotation/6.28318530718),fract(Time*Infall/max(Outer-Inner,.001)));
+    if(DiskRenewal==0) clock=vec4(mod(Time,8.),mod(floor(Time/8.),65536.),fract(floor(Time/8.)*8.*Rotation*turns),fract(Time*Infall/max(Outer-Inner,.001)));
     float local=clock.x-delay,flow=fract(clock.w-delay*Infall/max(Outer-Inner,.001));
-    if(Rotation==0.) return highCohort(disk,footprint,0.,0.,0.,flow,mass);
+    float introFlow=IntroEnabled!=0?IntroFlow:0.;
+    vec2 uv=vec2(atan(radial.y,radial.x)*turns,(r-inner)/span+flow+introFlow*.85);
+    vec2 width=vec2(footprint.y*turns/r,footprint.x/span);
+    if(Rotation==0.) return highCohort(uv-vec2(introFlow*1.7*shear*turns,0.),width+vec2(abs(introFlow*1.7)*shearWidth,0.),0.);
     float cycle0=floor((local+4.)/8.),cycle1=floor(local/8.);
     float age0=local-cycle0*8.,age1=local-(cycle1*8.+4.);
-    float anchor0=fract(clock.z+cycle0*8.*Rotation/6.28318530718);
-    float anchor1=fract(clock.z+(cycle1*8.+4.)*Rotation/6.28318530718);
+    vec2 phase=vec2(age0,age1)*Rotation+introFlow*1.7;
+    vec2 anchor=fract(clock.z+vec2(cycle0*8.,cycle1*8.+4.)*Rotation*turns);
+    vec2 azimuth=uv.x-phase*(shear*turns)-anchor;
+    vec2 azimuthWidth=width.x+abs(phase)*shearWidth;
     float blend=pow(cos(3.14159265359*age0/8.),2.);
-    vec3 first=highCohort(disk,footprint,age0,anchor0,highCohortHash(clock.y+cycle0,0),flow,mass);
-    vec3 second=highCohort(disk,footprint,age1,anchor1,highCohortHash(clock.y+cycle1,1),flow,mass);
+    vec3 first=highCohort(vec2(azimuth.x,uv.y),vec2(azimuthWidth.x,width.y),highCohortHash(clock.y+cycle0,0));
+    vec3 second=highCohort(vec2(azimuth.y,uv.y),vec2(azimuthWidth.y,width.y),highCohortHash(clock.y+cycle1,1));
     return mix(second,first,blend);
 }
-vec3 highEmission(float radius,float inner,float outer,vec3 material,float shift) {
+vec3 highEmission(float radius,float inner,float outer,vec3 material) {
     float q=inner/radius,peakQ=inner/min(outer,inner*(49./36.));
-    float flux=q*q*q*(1.-sqrt(q))/max(peakQ*peakQ*peakQ*(1.-sqrt(peakQ)),1e-9)*material.y*.5;
-    float temperature=12000.*pow(.615840287/max(gravitationalRadius(),.0001)*max(flux,0.),.25);
-    vec3 grade=mix(ColdColor,HotColor,clamp(flux,0.,1.));
-    // One stop less disk exposure; no local alteration of host scene exposure.
-    vec3 emission=thermalRadiance(temperature*shift)*grade*Brightness*1.73;
+    float flux=q*q*q*(1.-sqrt(q))/max(peakQ*peakQ*peakQ*(1.-sqrt(peakQ)),1e-9);
+    float temperature=6500.*sqrt(sqrt(max(flux,0.)))*(.91+.09*min(material.y,1.6));
+    vec3 grade=mix(ColdColor,HotColor,smoothstep(.14,.94,flux));
+    // White-balance the 16-band integral at 6500 K so the peak takes the
+    // authored hot color; cooler gas keeps its thermal hue. Disk exposure only.
+    const float filmExposure=2.2;
+    vec3 spectrum=thermalRadiance(temperature)/vec3(.1532,.1404,.1482);
+    vec3 emission=spectrum*grade*(Brightness*material.y*filmExposure);
     if(IntroEnabled!=0) emission*=1.+IntroCharge*.55+IntroTighten*2.8;
     return min(emission,vec3(60000.));
 }
@@ -146,33 +167,43 @@ void highAccumulate(inout Field f,vec3 emission,float absorbed,float depth) {
     else { f.back.rgb+=f.back.a*emission*absorbed;f.back.a*=1.-absorbed;f.lens.w=min(f.lens.w,depth); }
 }
 
-void kerrGas(inout Field f,vec3 a,vec3 b,KerrState start,KerrState finish,KerrConstants c,float mass,float h,float inner) {
+float gasHalfHeight(float thickness) {
+    return 1.45*thickness*inversesqrt(1.+(IntroEnabled!=0?1.5*IntroTighten:0.));
+}
+void highGasSample(inout Field f,vec2 radial,float radius,float inner,float outer,float thickness,
+                   vec2 footprint,float delay,float mass,float lengthInGas,vec2 vertical,float depth) {
+    vec3 material=highMaterial(radial,radius,footprint,delay,mass);
+    float edge=smoothstep(inner,inner+(outer-inner)*.04,radius)
+              *(1.-smoothstep(max(inner+(outer-inner)*.5,outer*.74),outer,radius));
+    // Exact mean of the vertical profiles 1-z² and (1-z²)² across this
+    // clipped subsegment. Adjacent RK steps can split the layer anywhere.
+    float z2=vertical.x*vertical.x,d2=vertical.y*vertical.y,profile=1.-z2;
+    float compact=profile*profile+(2.*z2-2./3.)*d2+.2*d2*d2;
+    float density=max(0.,mix(compact,profile-d2/3.,.15*material.z));
+    float optical=edge*material.x*density*lengthInGas/max(thickness,.02)*1.4;
+    highAccumulate(f,highEmission(radius,inner,outer,material),1.-exp(-optical),depth);
+}
+void kerrGas(inout Field f,vec3 a,vec3 b,KerrState start,KerrState finish,KerrConstants c,float mass,float inner) {
     float scale=bodyScale();
     float outer=Outer*scale,thickness=Thickness*scale;
     if(outer<=inner) return;
+    float halfHeight=gasHalfHeight(thickness);
     float begin=0.,end=1.,delta=b.z-a.z;
-    if(abs(delta)<1e-9) { if(abs(a.z)>thickness*2.) return; }
-    else { vec2 slab=(vec2(-2.,2.)*thickness-a.z)/delta;begin=max(0.,min(slab.x,slab.y));end=min(1.,max(slab.x,slab.y)); }
+    if(abs(delta)<1e-9) { if(abs(a.z)>halfHeight) return; }
+    else { vec2 slab=(vec2(-halfHeight,halfHeight)-a.z)/delta;begin=max(0.,min(slab.x,slab.y));end=min(1.,max(slab.x,slab.y)); }
     if(end<=begin) return;
-    float segmentLength=length(b-a)*(end-begin)*.5;
+    vec3 stepVector=(b-a)*((end-begin)*.5);
+    float segmentLength=length(stepVector);
     for(int i=0;i<2;i++) {
         float t=mix(begin,end,(float(i)+.5)*.5);
         vec3 p=mix(a,b,t),world=kerrWorld(p),eye=Eye-Center;
         float depth=length(world-eye);if(depth>=f.meta.x) continue;
         float r=kerrRadius(p/max(mass,1e-7),c.a),radius=mass*r;
         if(radius<=inner || radius>=outer) continue;
-        float energy=kerrEmitterEnergy(r,c);if(energy<=0.) continue;
         float delay=max(0.,mass*(c.observerRadius-r+mix(start.extra,finish.extra,t)))/80.;
-        vec2 disk=normalize(p.xy)*radius;
-        float footprint=max(depth*PixelAngle,segmentLength*.18);
-        vec3 material=highMaterial(disk,footprint,delay,mass);
-        float height=p.z/max(thickness,.001);
-        float mask=smoothstep(inner,inner+(outer-inner)*.04,radius)*(1.-smoothstep(max(inner+(outer-inner)*.5,outer*.74),outer,radius));
-        float sigma=r*r+c.a*c.a*pow(p.z/max(radius,.001),2.);
-        float restLength=mass*sigma*energy*h*(end-begin)*.5;
-        float optical=mask*material.x*exp(-height*height*(.55+material.z*.35)*(1.+(IntroEnabled!=0?IntroTighten*1.5:0.)))*restLength/max(thickness,.02)*1.4;
-        float absorbed=1.-exp(-optical);
-        highAccumulate(f,highEmission(radius,inner,outer,material,c.observerEnergy/energy),absorbed,depth);
+        vec2 radial=p.xy/max(length(p.xy),1e-8);
+        highGasSample(f,radial,radius,inner,outer,thickness,diskFootprint(radial,stepVector.xy,depth*PixelAngle),
+                      delay,mass,segmentLength,vec2(p.z,.5*stepVector.z)/halfHeight,depth);
     }
 }
 
@@ -211,7 +242,7 @@ vec4 traceKerr(inout Field f,vec3 direction,float mass,bool material) {
         next.n=normalize(next.n);next.w-=next.n*dot(next.n,next.w);
         vec3 endpoint=kerrPosition(next,c.a)*mass;
         float support=Outer*bodyScale()+Thickness*bodyScale()*2.;
-        if(material && !escaped && (length(position)<support*1.1 || length(endpoint)<support*1.1)) kerrGas(f,position,endpoint,s,next,c,mass,h,inner);
+        if(material && !escaped && (length(position)<support*1.1 || length(endpoint)<support*1.1)) kerrGas(f,position,endpoint,s,next,c,mass,inner);
         angle+=h*length(d.n+d.azimuth*axial(s.n));
         float u=next.radial.x,expected=1.+u*u*(c.c+u*(2.*c.k-c.a*c.a*c.q*u));
         error=max(error,abs(next.radial.y*next.radial.y-expected));
@@ -221,10 +252,16 @@ vec4 traceKerr(inout Field f,vec3 direction,float mass,bool material) {
         }
         if(escaped) {
             if(material && c.e>0.) {
-                vec4 projected=VP*vec4(kerrWorld(normalize(endpoint)),0.);
-                vec2 bounds=sphere(Eye-Center,direction,bodyExtent());
-                if(f.meta.x>=bounds.y && projected.w>1e-6 && !any(isnan(projected)) && !any(isinf(projected))) {
-                    f.lens.xy=projected.xy/projected.w*.5+.5;f.meta.w=min(f.meta.x,max(max(bounds.x,0.),mass*kerrHorizon(c.a)));
+                // Use the closest point on the viewing ray as a thin lens for host scenery.
+                // The actual null ray and all disk/horizon intersections stay untouched.
+                float pivot=max(dot(Center-Eye,direction),mass*kerrHorizon(c.a));
+                float impact=length(cross(Eye-Center,direction)),extent=bodyExtent();
+                float weight=1.-smoothstep(.75*extent,extent,impact);
+                vec3 outgoing=mix(direction,kerrWorld(normalize(endpoint)),weight);
+                vec4 projected=VP*vec4(outgoing,0.);
+                if(f.meta.x>pivot && projected.w>1e-6 && !any(isnan(projected)) && !any(isinf(projected))) {
+                    f.lens.xy=projected.xy/projected.w*.5+.5;
+                    f.meta.w=pivot;
                 }
             }
             return vec4(0,angle,error,0);
@@ -241,25 +278,31 @@ Field kerrField(vec2 uv) {
     Field f;f.front=vec4(0,0,0,1);f.back=f.front;f.lens=vec4(uv,65504,65504);f.meta=vec4(opaque,surface,0,-1);
     vec2 bounds=sphere(origin,direction,bodyExtent());if(bounds.y<=0. || max(0.,bounds.x)>=opaque)return f;
     float mass=highMass();
-    if(mass>1e-7)traceKerr(f,direction,mass,true);
+    if(mass>1e-7) {
+        // Foreground in front of the lens plane has no background deflection.
+        // A camera-centred distance bound also excludes every gas/horizon hit,
+        // including the oblate disk and the entire trapped-photon region.
+        float matterExtent=max((Outer+2.*Thickness)*bodyScale()+mass*abs(Spin),8.*mass);
+        if(opaque<=dot(-origin,direction) && length(origin)>opaque+matterExtent) return f;
+        traceKerr(f,direction,mass,true);
+    }
     else {
         // Zero mass: same high material/exposure and light clock, no horizon,
         // frequency shift, orbital speed or gravity. Clip the thin slab first.
         vec3 localOrigin=kerrLocal(origin),localDirection=kerrLocal(direction);
         float thickness=Thickness*bodyScale(),inner=Inner*bodyScale(),outer=Outer*bodyScale();
+        float halfHeight=gasHalfHeight(thickness);
         float start=max(0.,bounds.x),finish=min(bounds.y,opaque);
-        if(abs(localDirection.z)<1e-8) {if(abs(localOrigin.z)>thickness*2.)return f;}
-        else {vec2 slab=(vec2(-2.,2.)*thickness-localOrigin.z)/localDirection.z;start=max(start,min(slab.x,slab.y));finish=min(finish,max(slab.x,slab.y));}
+        if(abs(localDirection.z)<1e-8) {if(abs(localOrigin.z)>halfHeight)return f;}
+        else {vec2 slab=(vec2(-halfHeight,halfHeight)-localOrigin.z)/localDirection.z;start=max(start,min(slab.x,slab.y));finish=min(finish,max(slab.x,slab.y));}
         if(finish<=start)return f;
         float stride=(finish-start)/96.;
         for(int i=0;i<96;i++) {
             float depth=start+(float(i)+.5)*stride;vec3 p=localOrigin+localDirection*depth;
             float radius=length(p.xy);if(radius<=inner || radius>=outer)continue;
-            vec3 material=highMaterial(p.xy,max(depth*PixelAngle,stride*.18),depth/80.,0.);
-            float mask=smoothstep(inner,inner+(outer-inner)*.04,radius)*(1.-smoothstep(max(inner+(outer-inner)*.5,outer*.74),outer,radius));
-            float height=p.z/max(thickness,.001);
-            float optical=mask*material.x*exp(-height*height*(.55+material.z*.35)*(1.+(IntroEnabled!=0?IntroTighten*1.5:0.)))*stride/max(thickness,.02)*1.4;
-            highAccumulate(f,highEmission(radius,inner,outer,material,1.),1.-exp(-optical),depth);
+            vec2 radial=p.xy/radius;
+            highGasSample(f,radial,radius,inner,outer,thickness,diskFootprint(radial,localDirection.xy*stride,depth*PixelAngle),
+                          depth/80.,0.,stride,vec2(p.z,.5*localDirection.z*stride)/halfHeight,depth);
         }
     }
     return f;
